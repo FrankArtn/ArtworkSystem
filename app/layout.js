@@ -6,6 +6,7 @@ export const metadata = {
   description: "Quotes & Inventory for the sign shop",
 };
 
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
