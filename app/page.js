@@ -10,6 +10,9 @@ export default function Home() {
           <Link href="/quotes/new" className="inline-flex items-center justify-center rounded-md bg-black text-white px-4 py-2 font-medium hover:bg-neutral-800">
             Create a Quote
           </Link>
+          <Link href="/quotes" className="inline-flex items-center justify-center rounded-md border px-4 py-2 font-medium hover:bg-neutral-50">
+            View Quotes
+          </Link>
           <Link href="/materials" className="inline-flex items-center justify-center rounded-md border px-4 py-2 font-medium hover:bg-neutral-50">
             View Materials
           </Link>

@@ -7,9 +7,16 @@ export default function MaterialsPage() {
   const [qty, setQty] = useState(10);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Add stock (unallocated) controls
   const [selAdd, setSelAdd] = useState("");
   const [addQty, setAddQty] = useState(10);
   const [adding, setAdding] = useState(false);
+  const [addCost, setAddCost] = useState("");
+
+  // Jobs dropdown
+  const [jobs, setJobs] = useState([]);
+  const [jobSel, setJobSel] = useState(""); // selected job_number
 
   // new material form (no "on hand" — use initialUnallocated → unallocated_stock)
   const [form, setForm] = useState({
@@ -42,48 +49,85 @@ export default function MaterialsPage() {
       setMats([]);
     }
   }
-  useEffect(() => { load(); }, []);
 
+  async function loadJobs() {
+    try {
+      const r = await fetch("/api/orders/jobs?open=1", { cache: "no-store" });
+      const data = await r.json().catch(() => []);
+      if (r.ok && Array.isArray(data)) setJobs(data);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("GET /api/orders/jobs failed:", e);
+    }
+  }
+
+  useEffect(() => { load(); loadJobs(); }, []);
+
+  // Add to Unallocated
   async function addUnallocated() {
-  if (!selAdd) return;
-  setAdding(true);
-  setErr("");
-  try {
-    const r = await fetch("/api/materials/add", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: selAdd, delta: Number(addQty) }),
-    });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data?.error || "Add stock failed");
-    await load();
-  } catch (e) {
-    console.error(e);
-    setErr(e.message || "Failed to add stock");
-  } finally {
-    setAdding(false);
-  }
+    if (!selAdd) return;
+    const n = Number(addQty);
+    if (!Number.isFinite(n) || n <= 0) { setErr("Quantity must be a positive number"); return; }
+
+    setAdding(true);
+    setErr("");
+    try {
+      const r = await fetch("/api/materials/add", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: selAdd,
+          delta: n,
+          cost_price: addCost === "" ? undefined : Number(addCost),
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || "Add stock failed");
+      await load();
+      setAddCost(""); // reset the field on success
+    } catch (e) {
+      console.error(e);
+      setErr(e.message || "Failed to add stock");
+    } finally {
+      setAdding(false);
+    }
   }
 
-  // Transfer Unallocated → WIP (requires /api/materials/transfer to use unallocated_stock)
+  // Transfer Unallocated → WIP
   async function transferToWip() {
     if (!sel) return;
+    const n = Number(qty);
+    if (!Number.isFinite(n) || n <= 0) { setErr("Quantity must be a positive number"); return; }
+    if (!jobSel) { setErr("Please select a job"); return; }
+
     setLoading(true);
     setErr("");
+
     try {
       const r = await fetch("/api/materials/transfer", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: Number(sel), qty: Number(qty) }),
+        body: JSON.stringify({ id: sel, qty: n, job_number: jobSel }), // <-- send job_number
       });
+
       if (!r.ok) {
-        const txt = await r.text().catch(() => "");
-        throw new Error(txt || "transfer failed");
+        const raw = await r.text();
+        if (process.env.NODE_ENV !== "production") {
+          // eslint-disable-next-line no-console
+          console.error("Transfer failed:", r.status, raw);
+        }
+        let msg = "Transfer failed";
+        try { msg = JSON.parse(raw)?.error || msg; } catch {}
+        if (r.status === 409 && !/insufficient/i.test(msg)) {
+          msg = "Insufficient unallocated stock for this transfer";
+        }
+        throw new Error(msg);
       }
-      await load();
+
+      await load(); // refresh table
+      setJobSel("");
     } catch (e) {
-      console.error(e);
-      setErr("Failed to transfer (is /api/materials/transfer implemented for unallocated → WIP?)");
+      setErr(e.message || "Failed to transfer");
     } finally {
       setLoading(false);
     }
@@ -144,7 +188,7 @@ export default function MaterialsPage() {
             <th>Name</th>
             <th>SKU</th>
             <th>Unit</th>
-            <th>Sell price</th>
+            <th>Cost price</th>
             <th>Unallocated</th>
             <th>WIP</th>
             <th>Total</th>
@@ -159,7 +203,7 @@ export default function MaterialsPage() {
                 <td>{m.name}</td>
                 <td>{m.sku ? m.sku : <span className="text-neutral-400">—</span>}</td>
                 <td>{m.unit || "—"}</td>
-                <td>{m.sell_price ?? 0}</td>
+                <td>{typeof m.cost_price === "number" ? Number(m.cost_price).toFixed(2) : (m.cost_price ?? 0)}</td>
                 <td>{m.unallocated_stock ?? 0}</td>
                 <td>{m.wip_qty ?? 0}</td>
                 <td>{m.stock_qty ?? ((m.unallocated_stock ?? 0) + (m.wip_qty ?? 0))}</td>
@@ -185,7 +229,8 @@ export default function MaterialsPage() {
               <option value="" disabled>Select material</option>
               {rows.map(m => (
                 <option key={m.id} value={String(m.id)}>
-                  {m.name} (current {m.unallocated_stock ?? 0})
+                  {m.name} — Unalloc {m.unallocated_stock ?? 0}
+                  {typeof m.cost_price === "number" ? ` @ $${Number(m.cost_price).toFixed(2)}` : ""}
                 </option>
               ))}
             </select>
@@ -197,6 +242,14 @@ export default function MaterialsPage() {
               onChange={e => setAddQty(e.target.value)}
               min="1"
             />
+            <input
+              type="number"
+              step="0.01"
+              className="border rounded px-2 py-1 w-28"
+              value={addCost}
+              onChange={e => setAddCost(e.target.value)}
+              placeholder="Unit cost (opt)"
+            />
 
             <button
               onClick={addUnallocated}
@@ -206,6 +259,10 @@ export default function MaterialsPage() {
               {adding ? "Adding…" : "Add stock"}
             </button>
           </div>
+          <p className="text-xs text-neutral-500 mt-2">
+            If a unit cost is entered, the material’s <em>cost price</em> is recalculated as a
+            weighted average using the current <strong>Unallocated</strong> quantity.
+          </p>
         </div>
       </details>
 
@@ -223,8 +280,9 @@ export default function MaterialsPage() {
               onChange={e => setSel(e.target.value)}
             >
               <option value="" disabled>Select material</option>
-              {rows.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              {rows.map(m => <option key={m.id} value={String(m.id)}>{m.name}</option>)}
             </select>
+
             <input
               type="number"
               className="border rounded px-2 py-1 w-24"
@@ -232,6 +290,29 @@ export default function MaterialsPage() {
               onChange={e => setQty(e.target.value)}
               min="1"
             />
+
+            {/* Job dropdown */}
+            <select
+              className="border rounded px-2 py-1"
+              value={jobSel}
+              onChange={(e) => setJobSel(e.target.value)}
+            >
+              <option value="" disabled>Select job</option>
+              {jobs.map(j => (
+                <option key={`job-${j.id}`} value={j.job_number}>
+                  {j.job_number}{j.quote_number ? ` — ${j.quote_number}` : ""}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="border rounded px-2 py-1"
+              onClick={loadJobs}
+              title="Refresh jobs"
+            >
+              ↻
+            </button>
+
             <button
               onClick={transferToWip}
               disabled={loading || !sel}
