@@ -7,7 +7,7 @@ export default function Home() {
         <h1 className="text-3xl font-semibold">Artwork System</h1>
         <p className="mt-2 text-neutral-600">Quote jobs, manage materials, and auto-deduct stock when orders complete.</p>
         <div className="mt-6 flex flex-col sm:flex-row gap-3">
-          <Link href="/quotes/new" className="inline-flex items-center justify-center rounded-md bg-black text-white px-4 py-2 font-medium hover:bg-neutral-800">
+          <Link href="/quotes/new" className="inline-flex items-center justify-center rounded-md border text-white px-4 py-2 font-medium hover:bg-neutral-800">
             Create a Quote
           </Link>
           <Link href="/quotes" className="inline-flex items-center justify-center rounded-md border px-4 py-2 font-medium hover:bg-neutral-50">

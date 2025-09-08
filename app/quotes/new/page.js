@@ -10,6 +10,18 @@ export default function NewQuotePage() {
   const [prodSel, setProdSel] = useState('');
   const [qty, setQty] = useState(1);
 
+  // local, temporary markup edits keyed by item id (string values for smooth typing)
+    const [markupEdits, setMarkupEdits] = useState({}); // { [itemId]: "12.5" }
+
+    function pctFromCostSale(cost, sale) {
+    const c = toNumber(cost), s = toNumber(sale);
+    return c > 0 ? ((s - c) / c) * 100 : 0;
+    }
+    function saleFromCostPct(cost, pct) {
+    const c = toNumber(cost), p = Number.isFinite(Number(pct)) ? Number(pct) : 0;
+    return round2(c * (1 + p / 100));
+    }
+
   // Markup % (string so typing feels natural)
   const [markupPct, setMarkupPct] = useState('0');
 
@@ -65,6 +77,7 @@ export default function NewQuotePage() {
       const r = await fetch(`/api/quotes/${id}/items`, { cache: 'no-store' });
       const data = await r.json().catch(() => []);
       setItems(Array.isArray(data) ? data : []);
+      setMarkupEdits({}); // reset any in-progress edits after a reload
     } catch {
       setItems([]);
     }
@@ -248,52 +261,104 @@ export default function NewQuotePage() {
       </div>
 
       {/* Items table */}
-      <table className="w-full border-collapse">
+        <table className="w-full border-collapse">
         <thead>
-          <tr className="[&>th]:text-left [&>th]:py-2 [&>th]:border-b">
-            <th>Product</th><th>SKU</th><th>Qty</th>
-            <th>Sale price (from markup)</th>
-            <th>Cost</th><th>Line total</th><th></th>
-          </tr>
+            <tr className="[&>th]:text-left [&>th]:py-2 [&>th]:px-4 [&>th]:border-b">
+            <th>Product</th>
+            <th>SKU</th>
+            <th>Cost</th>
+            <th>Markup %</th>
+            <th>Sale price</th>
+            <th>Qty</th>
+            <th>Line total</th>
+            <th></th>
+            </tr>
         </thead>
         <tbody>
-          {items.length === 0 ? (
-            <tr><td colSpan={7} className="py-4 text-neutral-500">No items yet.</td></tr>
-          ) : items.map(it => {
-              const line = round2(toNumber(it.sale_price) * toNumber(it.qty || 1));
-              return (
-                <tr key={it.id} className="[&>td]:py-2 [&>td]:border-b">
-                  <td>{it.product_name}</td>
-                  <td>{it.sku || '—'}</td>
-                  <td>
-                    <input
-                      type="number" min="1"
-                      className="border rounded px-2 py-1 w-20"
-                      value={it.qty}
-                      onChange={e => updateItem(it.id, { qty: Number(e.target.value) })}
-                    />
-                  </td>
-                  <td>${toNumber(it.sale_price).toFixed(2)}</td>
-                  <td>${toNumber(it.cost_price).toFixed(2)}</td>
-                  <td>${line.toFixed(2)}</td>
-                  <td>
-                    <button onClick={() => removeItem(it.id)} className="px-2 py-1 border rounded">Remove</button>
-                  </td>
+            {items.length === 0 ? (
+                <tr>
+                <td colSpan={8} className="py-4 text-neutral-500">No items yet.</td>
                 </tr>
-              );
-            })}
-        </tbody>
+            ) : items.map(it => {
+                const cost  = toNumber(it.cost_price);
+                const sale  = toNumber(it.sale_price);
+                const qtyN  = toNumber(it.qty || 1);
+
+                // current markup from stored sale/cost
+                const currentPct = cost > 0 ? ((sale - cost) / cost) * 100 : 0;
+
+                // local edit state (string) — make sure you added: const [markupEdits, setMarkupEdits] = useState({});
+                const editPctStr = markupEdits?.[it.id];
+
+                // value shown in the input
+                const inputPct = editPctStr ?? currentPct.toFixed(1);
+
+                // preview sale while typing; falls back to stored sale
+                const previewSale = Number.isFinite(Number(editPctStr))
+                    ? round2(cost * (1 + Number(editPctStr) / 100))
+                    : sale;
+
+                const line = round2(previewSale * qtyN);
+
+                return (
+                    <tr key={it.id} className="[&>td]:py-2 [&>td]:px-4 [&>td]:border-b">
+                    <td>{it.product_name}</td>
+                    <td>{it.sku || '—'}</td>
+                    <td>${cost.toFixed(2)}</td>
+
+                    {/* Markup % (editable) */}
+                    <td>
+                        <input
+                        type="number"
+                        step="0.1"
+                        min="-100"
+                        className="border rounded px-2 py-1 w-24 text-right"
+                        value={inputPct}
+                        onChange={e => setMarkupEdits(m => ({ ...m, [it.id]: e.target.value }))}
+                        onBlur={async e => {
+                            const v = Number(e.target.value);
+                            const pct = Number.isFinite(v) ? v : currentPct;
+                            const newSale = round2(cost * (1 + pct / 100));
+                            await updateItem(it.id, { sale_price: newSale });
+                        }}
+                        />
+                    </td>
+
+                    {/* Sale price (read-only, shows preview) */}
+                    <td>${previewSale.toFixed(2)}</td>
+
+                    <td>
+                        <input
+                        type="number" min="1"
+                        className="border rounded px-2 py-1 w-20"
+                        value={it.qty}
+                        onChange={e => updateItem(it.id, { qty: Number(e.target.value) })}
+                        />
+                    </td>
+
+                    <td>${line.toFixed(2)}</td>
+
+                    <td>
+                        <button onClick={() => removeItem(it.id)} className="px-2 py-1 border rounded">
+                        Remove
+                        </button>
+                    </td>
+                    </tr>
+                );
+                })}
+            </tbody>
         <tfoot>
-          <tr>
-            <td colSpan={5} className="text-right font-medium py-2">Total</td>
+            <tr>
+            <td colSpan={6} className="text-right font-medium py-2">Total</td>
             <td className="font-semibold">${total.toFixed(2)}</td>
             <td />
-          </tr>
+            </tr>
         </tfoot>
-      </table>
+        </table>
+
 
       <div className="mt-4 flex gap-2">
-        <button onClick={submitForApproval} className="rounded bg-black text-white px-4 py-2">
+        <button onClick={submitForApproval} className="rounded border px-4 py-2">
           Submit for approval
         </button>
         <button onClick={() => router.push('/quotes')} className="rounded border px-4 py-2">
