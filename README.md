@@ -35,7 +35,7 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
-* Used Node.js to run JavaScript outside the browser, so can run from terminal
+##Used Node.js to run JavaScript outside the browser, so can run from terminal
 Node.js = the runtime that executes JavaScript outside the browser (on a server or your dev machine).
 
 Used Vercel to deploy
@@ -47,7 +47,7 @@ Executes your server-side code (Next.js API routes like /api/materials, DB calls
 Powers the server process on Render.
 
 
-* Frontend and Backend: Use Next.js for web framework 
+##Frontend and Backend: Use Next.js for web framework 
 Next.js = a web framework built on top of React + Node.js that gives you routing, server rendering, API routes, bundling, etc.
 Next.js
 
@@ -60,7 +60,7 @@ Handles assets, builds, and optimizations.
 Next.js relies on Node.js to run
 
 
-*Database: Turso (libSQL)
+##Database: Turso (libSQL)
 Turso (libSQL) remote SQLite; accessed over HTTP with @libsql/client.
 
 Schema created by scripts/init-db.mjs:
@@ -71,7 +71,7 @@ Env vars:
 
 TURSO_DATABASE_URL, TURSO_AUTH_TOKEN (in .env.local for dev; in Render for prod).
 
-*Config & Build
+##Config & Build
 package.json:
 
 dev: next dev (you may keep --turbopack locally).
@@ -85,7 +85,7 @@ db:init: node scripts/init-db.mjs.
 Node 20 pinned via "engines": { "node": "20.x" }
 
 
-*Deployment: Render
+##Deployment: Render
 Render Web Service (region: Singapore).
 
 Auto-deploys from GitHub’s main.
@@ -96,7 +96,7 @@ Production env vars set in Render.
 
 The Artwork System (Next.js) is hosted on Render (Singapore region), and it uses a Turso (libSQL) database.
 
-*Migration to Postgres or SQlite ready if an upgrade is needed.
+##Migration to Postgres or SQlite ready if an upgrade is needed.
 Just need to change 'DB_PROVIDER= [new provider]' in the .env.local file
 providers script is also ready in lib/providers
 employed one db access point in db.js in lib/ from the get go so that all db  queries use the getdb() method.
