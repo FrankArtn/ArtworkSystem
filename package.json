@@ -2,6 +2,7 @@
   "name": "artworksystem",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "engines": { "node": "20.x" },
   "scripts": {
     "dev": "next dev --turbopack",
@@ -10,7 +11,8 @@
     "lint": "eslint .",
     "db:init": "node scripts/init-db.mjs",
     "db:migrate": "node scripts/migrate.js",
-    "db:seed": "node scripts/seed.js"
+    "db:seed": "node scripts/seed.js",
+    "db:patch:materials": "node scripts/patch-add-columns.js"
   },
   "dependencies": {
     "@libsql/client": "^0.15.14",
@@ -27,4 +29,3 @@
     "tailwindcss": "^4"
   }
 }
-
