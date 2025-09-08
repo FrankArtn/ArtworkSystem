@@ -51,6 +51,8 @@ Build: npm ci && npm run build
 
 Start: npm run db:migrate && npm start
 
+Run Local terminal: npm run dev
+
 Health path: /api/health.
 
 
