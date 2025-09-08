@@ -2,8 +2,7 @@
 const nextConfig = {
   webpack: (config, { isServer }) => {
     if (isServer) {
-      // Don’t bundle optional DB drivers; they’ll only be required at runtime
-      // if you flip DB_PROVIDER later.
+      // Treat optional DB drivers as externals so webpack doesn’t try to resolve them
       config.externals = config.externals || [];
       config.externals.push({
         pg: "commonjs pg",

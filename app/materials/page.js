@@ -2,20 +2,20 @@
 import { useEffect, useState } from "react";
 
 export default function MaterialsPage() {
-  const [mats, setMats] = useState([]);
+  const [mats, setMats] = useState([]); // always an array
   const [sel, setSel] = useState("");
   const [qty, setQty] = useState(10);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // new material form
+  // new material form (no "on hand" — use initialUnallocated → unallocated_stock)
   const [form, setForm] = useState({
     name: "",
     sku: "",
     unit: "m2",
     costPerUnit: "",
-    reorderLevel: "",
-    onHand: "",
+    reorderLevel: "",       // kept for UI only (not used by API yet)
+    initialUnallocated: "", // sent to unallocated_stock at create time
   });
   const [creating, setCreating] = useState(false);
   const [createMsg, setCreateMsg] = useState("");
@@ -24,28 +24,42 @@ export default function MaterialsPage() {
     setErr("");
     try {
       const r = await fetch("/api/materials", { cache: "no-store" });
+      if (!r.ok) {
+        try { console.error("GET /api/materials failed:", await r.text()); } catch {}
+        setMats([]);
+        return;
+      }
       const data = await r.json();
-      setMats(data);
-      if (!sel && data.length) setSel(String(data[0].id));
-    } catch {
+      const rows = Array.isArray(data) ? data : [];
+      setMats(rows);
+      if (!sel && rows.length) setSel(String(rows[0].id));
+    } catch (e) {
+      console.error(e);
       setErr("Failed to load materials");
+      setMats([]);
     }
   }
   useEffect(() => { load(); }, []);
 
-  async function addStock() {
+  // Transfer Unallocated → WIP (requires /api/materials/transfer to use unallocated_stock)
+  async function transferToWip() {
     if (!sel) return;
     setLoading(true);
     setErr("");
     try {
-      await fetch("/api/materials", {
+      const r = await fetch("/api/materials/transfer", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ materialId: Number(sel), qty: Number(qty) }),
+        body: JSON.stringify({ id: Number(sel), qty: Number(qty) }),
       });
+      if (!r.ok) {
+        const txt = await r.text().catch(() => "");
+        throw new Error(txt || "transfer failed");
+      }
       await load();
-    } catch {
-      setErr("Failed to add stock");
+    } catch (e) {
+      console.error(e);
+      setErr("Failed to transfer (is /api/materials/transfer implemented for unallocated → WIP?)");
     } finally {
       setLoading(false);
     }
@@ -61,29 +75,38 @@ export default function MaterialsPage() {
         name: form.name.trim(),
         sku: form.sku.trim() || null,
         unit: form.unit,
-        costPerUnit: Number(form.costPerUnit),
-        reorderLevel: form.reorderLevel === "" ? 0 : Number(form.reorderLevel),
-        onHand: form.onHand === "" ? 0 : Number(form.onHand),
+        cost_price: form.costPerUnit === "" ? 0 : Number(form.costPerUnit),
+        sell_price: 0, // adjust later if needed
+        // Initial unallocated stock (replaces old "on hand")
+        unallocated_stock: form.initialUnallocated === "" ? 0 : Number(form.initialUnallocated),
+        // wip_qty omitted -> defaults to 0
       };
+
       const r = await fetch("/api/materials", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await r.json();
+      const data = await r.json().catch(() => ({}));
       if (!r.ok) {
         setErr(data?.error || "Failed to create material");
       } else {
-        setCreateMsg(`Created: ${data.material.name}`);
-        setForm({ name: "", sku: "", unit: "m2", costPerUnit: "", reorderLevel: "", onHand: "" });
+        setCreateMsg(`Created: ${payload.name}`);
+        setForm({
+          name: "", sku: "", unit: "m2", costPerUnit: "",
+          reorderLevel: "", initialUnallocated: ""
+        });
         await load();
       }
-    } catch {
+    } catch (e) {
+      console.error(e);
       setErr("Failed to create material");
     } finally {
       setCreating(false);
     }
   }
+
+  const rows = Array.isArray(mats) ? mats : [];
 
   return (
     <div className="max-w-4xl">
@@ -94,29 +117,38 @@ export default function MaterialsPage() {
       <table className="w-full border-collapse">
         <thead>
           <tr className="[&>th]:text-left [&>th]:py-2 [&>th]:border-b">
-            <th>Name</th><th>SKU</th><th>Unit</th><th>Cost/Unit</th><th>On hand</th>
+            <th>Name</th>
+            <th>SKU</th>
+            <th>Unit</th>
+            <th>Sell price</th>
+            <th>Unallocated</th>
+            <th>WIP</th>
+            <th>Total</th>
           </tr>
         </thead>
         <tbody>
-          {mats.map(m => (
-            <tr key={m.id} className="[&>td]:py-2 [&>td]:border-b">
-              <td>{m.name}</td>
-              <td>{m.sku || <span className="text-neutral-400">—</span>}</td>
-              <td>{m.unit}</td>
-              <td>{m.cost_per_unit}</td>
-              <td>{m.on_hand}</td>
-            </tr>
-          ))}
-          {!mats.length && (
-            <tr><td colSpan={5} className="py-4 text-neutral-500">No materials found.</td></tr>
+          {rows.length === 0 ? (
+            <tr><td colSpan={7} className="py-4 text-neutral-500">No materials found.</td></tr>
+          ) : (
+            rows.map((m) => (
+              <tr key={m.id} className="[&>td]:py-2 [&>td]:border-b">
+                <td>{m.name}</td>
+                <td>{m.sku ? m.sku : <span className="text-neutral-400">—</span>}</td>
+                <td>{m.unit || "—"}</td>
+                <td>{m.sell_price ?? 0}</td>
+                <td>{m.unallocated_stock ?? 0}</td>
+                <td>{m.wip_qty ?? 0}</td>
+                <td>{m.stock_qty ?? ((m.unallocated_stock ?? 0) + (m.wip_qty ?? 0))}</td>
+              </tr>
+            ))
           )}
         </tbody>
       </table>
 
-      {/* Collapsible: Add stock (collapsed by default) */}
+      {/* Collapsible: Transfer unallocated → WIP */}
       <details className="group mt-6 border rounded-xl">
         <summary className="flex items-center justify-between cursor-pointer list-none px-4 py-3 select-none">
-          <span className="font-medium">Add stock</span>
+          <span className="font-medium">Start job (move Unallocated → WIP)</span>
           <Chevron />
         </summary>
         <div className="px-4 pb-4">
@@ -127,7 +159,7 @@ export default function MaterialsPage() {
               onChange={e => setSel(e.target.value)}
             >
               <option value="" disabled>Select material</option>
-              {mats.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              {rows.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
             <input
               type="number"
@@ -137,17 +169,17 @@ export default function MaterialsPage() {
               min="1"
             />
             <button
-              onClick={addStock}
+              onClick={transferToWip}
               disabled={loading || !sel}
               className="rounded bg-black text-white px-3 py-1 disabled:opacity-60"
             >
-              {loading ? "Adding…" : "Add stock"}
+              {loading ? "Transferring…" : "Transfer to WIP"}
             </button>
           </div>
         </div>
       </details>
 
-      {/* Collapsible: Create new material (collapsed by default) */}
+      {/* Collapsible: Create new material */}
       <details className="group mt-4 border rounded-xl">
         <summary className="flex items-center justify-between cursor-pointer list-none px-4 py-3 select-none">
           <span className="font-medium">Create new material</span>
@@ -209,13 +241,14 @@ export default function MaterialsPage() {
               />
             </label>
             <label className="grid gap-1">
-              <span className="text-sm text-neutral-700">Initial on hand</span>
+              <span className="text-sm text-neutral-700">Initial unallocated</span>
               <input
                 type="number"
-                step="0.01"
+                step="1"
+                min="0"
                 className="border rounded px-2 py-1"
-                value={form.onHand}
-                onChange={e => setForm(f => ({ ...f, onHand: e.target.value }))}
+                value={form.initialUnallocated}
+                onChange={e => setForm(f => ({ ...f, initialUnallocated: e.target.value }))}
                 placeholder="0"
               />
             </label>
