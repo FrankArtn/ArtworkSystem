@@ -7,6 +7,9 @@ export default function MaterialsPage() {
   const [qty, setQty] = useState(10);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+  const [selAdd, setSelAdd] = useState("");
+  const [addQty, setAddQty] = useState(10);
+  const [adding, setAdding] = useState(false);
 
   // new material form (no "on hand" — use initialUnallocated → unallocated_stock)
   const [form, setForm] = useState({
@@ -40,6 +43,27 @@ export default function MaterialsPage() {
     }
   }
   useEffect(() => { load(); }, []);
+
+  async function addUnallocated() {
+  if (!selAdd) return;
+  setAdding(true);
+  setErr("");
+  try {
+    const r = await fetch("/api/materials/add", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: selAdd, delta: Number(addQty) }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data?.error || "Add stock failed");
+    await load();
+  } catch (e) {
+    console.error(e);
+    setErr(e.message || "Failed to add stock");
+  } finally {
+    setAdding(false);
+  }
+  }
 
   // Transfer Unallocated → WIP (requires /api/materials/transfer to use unallocated_stock)
   async function transferToWip() {
@@ -144,6 +168,46 @@ export default function MaterialsPage() {
           )}
         </tbody>
       </table>
+
+      {/* Collapsible: Add stock to Unallocated */}
+      <details className="group mt-4 border rounded-xl">
+        <summary className="flex items-center justify-between cursor-pointer list-none px-4 py-3 select-none">
+          <span className="font-medium">Add stock (increase Unallocated)</span>
+          <Chevron />
+        </summary>
+        <div className="px-4 pb-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              className="border rounded px-2 py-1"
+              value={selAdd}
+              onChange={e => setSelAdd(e.target.value)}
+            >
+              <option value="" disabled>Select material</option>
+              {rows.map(m => (
+                <option key={m.id} value={String(m.id)}>
+                  {m.name} (current {m.unallocated_stock ?? 0})
+                </option>
+              ))}
+            </select>
+
+            <input
+              type="number"
+              className="border rounded px-2 py-1 w-24"
+              value={addQty}
+              onChange={e => setAddQty(e.target.value)}
+              min="1"
+            />
+
+            <button
+              onClick={addUnallocated}
+              disabled={adding || !selAdd}
+              className="rounded bg-black text-white px-3 py-1 disabled:opacity-60"
+            >
+              {adding ? "Adding…" : "Add stock"}
+            </button>
+          </div>
+        </div>
+      </details>
 
       {/* Collapsible: Transfer unallocated → WIP */}
       <details className="group mt-6 border rounded-xl">
