@@ -1,54 +1,81 @@
-// app/api/materials/route.js
-import db from "@/lib/db";
+import { NextResponse } from "next/server";
+import { query } from "@/lib/db";
+import { randomUUID } from "crypto";
 
-export async function GET() {
-  const res = await db.execute(`SELECT * FROM materials ORDER BY name`);
-  return new Response(JSON.stringify(res.rows), { status: 200 });
+// GET /api/materials
+export async function GET(req) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const q = (searchParams.get("q") || "").trim();
+
+    let sql, params;
+    if (q) {
+      sql = `
+        SELECT id, name, sku, category, unit, sell_price, stock_qty
+        FROM materials
+        WHERE name LIKE ? OR sku LIKE ?
+        ORDER BY name ASC
+        LIMIT 200
+      `;
+      params = [`%${q}%`, `%${q}%`];
+    } else {
+      sql = `
+        SELECT id, name, sku, category, unit, sell_price, stock_qty
+        FROM materials
+        ORDER BY updated_at DESC
+        LIMIT 200
+      `;
+      params = [];
+    }
+
+    const res = await query(sql, params);
+    return NextResponse.json(res.rows || []);
+  } catch (err) {
+    console.error("GET /materials failed:", err);
+    return NextResponse.json({ error: "Failed to fetch materials" }, { status: 500 });
+  }
 }
 
+// POST /api/materials
 export async function POST(req) {
-  const body = await req.json();
-
-  // CASE A: add stock to existing material
-  if (typeof body.materialId === "number" && typeof body.qty === "number") {
-    await db.execute({
-      sql: `UPDATE materials SET on_hand = on_hand + ? WHERE id = ?`,
-      args: [body.qty, body.materialId],
-    });
-    return new Response(JSON.stringify({ ok: true, action: "add_stock" }), { status: 200 });
-  }
-
-  // CASE B: create a new material
-  const { name, sku, unit, costPerUnit, reorderLevel = 0, onHand = 0 } = body || {};
-  if (!name || !unit || typeof costPerUnit !== "number") {
-    return new Response(
-      JSON.stringify({ error: "Missing required fields: name, unit, costPerUnit" }),
-      { status: 400 }
-    );
-  }
-
   try {
-    const result = await db.execute({
-      sql: `INSERT INTO materials (sku, name, unit, cost_per_unit, reorder_level, on_hand)
-            VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [sku || null, name, unit, costPerUnit, reorderLevel, onHand],
-    });
+    const body = await req.json();
 
-    // libsql returns lastInsertRowid in result.lastInsertRowid (string); fetch the row
-    const { rows } = await db.execute({
-      sql: `SELECT * FROM materials WHERE id = ?`,
-      args: [Number(result.lastInsertRowid)],
-    });
-
-    return new Response(JSON.stringify({ ok: true, action: "create", material: rows[0] }), {
-      status: 201,
-    });
-  } catch (e) {
-    // handle UNIQUE(sku) conflicts nicely
-    const msg = String(e?.message || "");
-    if (msg.toLowerCase().includes("unique") && msg.toLowerCase().includes("sku")) {
-      return new Response(JSON.stringify({ error: "SKU already exists" }), { status: 409 });
+    // Basic validation
+    const name = String(body.name || "").trim();
+    if (!name) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
-    return new Response(JSON.stringify({ error: "Failed to create material" }), { status: 500 });
+
+    const id = randomUUID();
+    const now = new Date().toISOString();
+
+    await query(
+      `
+      INSERT INTO materials (
+        id, name, sku, category, unit,
+        cost_price, sell_price, stock_qty,
+        created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        id,
+        name,
+        body.sku || null,
+        body.category || null,
+        body.unit || null,
+        Number(body.cost_price || 0),
+        Number(body.sell_price || 0),
+        Number(body.stock_qty || 0),
+        now,
+        now,
+      ]
+    );
+
+    return NextResponse.json({ id }, { status: 201 });
+  } catch (err) {
+    console.error("POST /materials failed:", err);
+    return NextResponse.json({ error: "Failed to create material" }, { status: 500 });
   }
 }
