@@ -35,12 +35,32 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
+
+
+🔹 Stack & Hosting
+
+Framework: Next.js 15 (App Router, Turbopack, React 19, Node 20+).
+
+Hosting: Render Web Service (Singapore).
+
+Database: Turso (libSQL) via @libsql/client (env: TURSO_DATABASE_URL, TURSO_AUTH_TOKEN).
+
+Render build commands:
+
+Build: npm ci && npm run build
+
+Start: npm run db:migrate && npm start
+
+Health path: /api/health.
+
+
+
+
 ##Used Node.js to run JavaScript outside the browser, so can run from terminal
 Node.js = the runtime that executes JavaScript outside the browser (on a server or your dev machine).
 
 Used Vercel to deploy
 
-Runs npm run dev, next build, next start.
 
 Executes your server-side code (Next.js API routes like /api/materials, DB calls to Turso).
 
