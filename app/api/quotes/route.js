@@ -42,7 +42,22 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}));
-    const customer = (body.customer ?? "").trim() || null;
+
+    // Accept string or null; trim strings; empty string -> NULL
+    let customer = null;
+    if (Object.prototype.hasOwnProperty.call(body, "customer")) {
+      if (typeof body.customer === "string") {
+        const t = body.customer.trim();
+        customer = t === "" ? null : t;
+      } else if (body.customer === null) {
+        customer = null;
+      }
+    }
+
+    // (Optional) length guard — uncomment if you want validation
+    // if (typeof customer === "string" && customer.length > 200) {
+    //   return NextResponse.json({ error: "customer too long" }, { status: 400 });
+    // }
 
     await query(
       `INSERT INTO quotes (
@@ -53,13 +68,17 @@ export async function POST(req) {
     );
 
     const r = await query(
-      `SELECT id, quote_number, status, created_at, updated_at
+      `SELECT id, quote_number, status, customer, created_at, updated_at
          FROM quotes
         WHERE id = last_insert_rowid()
         LIMIT 1`
     );
+
     return NextResponse.json(r.rows?.[0] ?? null, { status: 201 });
   } catch (e) {
-    return NextResponse.json({ error: e?.message || "Failed to create quote" }, { status: 500 });
+    return NextResponse.json(
+      { error: e?.message || "Failed to create quote" },
+      { status: 500 }
+    );
   }
 }

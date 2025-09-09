@@ -30,13 +30,18 @@ export async function PATCH(req, context) {
   const body = await req.json().catch(() => ({}));
 
   const updates = [];
-  const values = [];
+  const values  = [];
 
-  if (typeof body.customer === "string") {
+  // customer: accept string (trimmed), or null/empty -> store NULL
+  if (Object.prototype.hasOwnProperty.call(body, "customer")) {
+    let c = body.customer;
+    if (typeof c === "string") c = c.trim();
+    if (c === "" || c === null) c = null;
     updates.push("customer = ?");
-    values.push(body.customer.trim() || null);
+    values.push(c);
   }
 
+  // status: strict allow-list
   if (typeof body.status === "string") {
     const status = body.status.trim();
     const allowed = new Set([
@@ -64,7 +69,8 @@ export async function PATCH(req, context) {
   if (!r || r.rowsAffected === 0) return jerr("quote not found", 404);
 
   const out = await query(
-    `SELECT id, quote_number, status, customer, created_at, updated_at FROM quotes WHERE id=?`,
+    `SELECT id, quote_number, status, customer, created_at, updated_at
+       FROM quotes WHERE id = ?`,
     [qid]
   );
   return NextResponse.json(out.rows?.[0] ?? null);

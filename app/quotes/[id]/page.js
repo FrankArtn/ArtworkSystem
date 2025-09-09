@@ -4,13 +4,13 @@ import { useEffect, useMemo, useState, use as usePromise } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function QuoteDetailPage({ params }) {
-    const router = useRouter();
-    const [quote, setQuote] = useState(null);
-    const [items, setItems] = useState([]);
-    const [err, setErr] = useState('');
-    const [deleting, setDeleting] = useState(false);
-    const { id: rawId } = usePromise(params);
-    const id = useMemo(() => Number(rawId), [rawId]);
+  const router = useRouter();
+  const [quote, setQuote] = useState(null);
+  const [items, setItems] = useState([]);
+  const [err, setErr] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const { id: rawId } = usePromise(params);
+  const id = useMemo(() => Number(rawId), [rawId]);
 
   // ✅ NEW: local state to show success panel after deletion
   const [deleted, setDeleted] = useState(false);
@@ -127,10 +127,21 @@ export default function QuoteDetailPage({ params }) {
       <h2 className="text-2xl font-semibold mb-3">Quote Review</h2>
       {err && <p className="text-red-600 mb-2">{err}</p>}
 
+      {/* ✅ NEW: Customer at the top */}
+      {quote && (
+        <div className="mb-1 text-base">
+          <span className="font-medium">Customer:</span>{' '}
+          {quote.customer?.trim() ? quote.customer : <span className="text-neutral-500">—</span>}
+        </div>
+      )}
+
       {quote && (
         <div className="mb-4 text-sm text-neutral-600">
           Quote #: {quote.quote_number || `QUO-${String(quote.id).padStart(6,'0')}`}
           &nbsp;·&nbsp; Status: <span className="font-medium">{quote.status || 'draft'}</span>
+          {/* (Optional) inline customer display instead of the separate line above:
+              &nbsp;·&nbsp; Customer: <span className="font-medium">{quote.customer || '—'}</span>
+          */}
         </div>
       )}
 
@@ -193,20 +204,20 @@ export default function QuoteDetailPage({ params }) {
                   {/* Markup % (editable) */}
                   <td>
                     <input
-                        type="number"
-                        step="0.1"
-                        min="-100"
-                        className={`${blackBare} w-24 text-right border border-white`}
-                        value={
-                            editPctStr ?? (Number.isFinite(currentPct) ? currentPct.toFixed(1) : '0.0')
-                        }
-                        onChange={e => setMarkupEdits(m => ({ ...m, [it.id]: e.target.value }))}
-                        onBlur={async e => {
-                            const v = Number(e.target.value);
-                            const newSale = saleFromCostPct(cost, Number.isFinite(v) ? v : 0);
-                            await updateItem(it.id, { sale_price: newSale });
-                        }}
-                        />
+                      type="number"
+                      step="0.1"
+                      min="-100"
+                      className={`${blackBare} w-24 text-right border border-white`}
+                      value={
+                        editPctStr ?? (Number.isFinite(currentPct) ? currentPct.toFixed(1) : '0.0')
+                      }
+                      onChange={e => setMarkupEdits(m => ({ ...m, [it.id]: e.target.value }))}
+                      onBlur={async e => {
+                        const v = Number(e.target.value);
+                        const newSale = saleFromCostPct(cost, Number.isFinite(v) ? v : 0);
+                        await updateItem(it.id, { sale_price: newSale });
+                      }}
+                    />
                   </td>
 
                   {/* Sale price (read-only, shows computed/preview) */}
@@ -260,12 +271,12 @@ export default function QuoteDetailPage({ params }) {
 
         {/* c) Approve & PDF (opens in new tab) */}
         <a
-            href={`/api/quotes/${id}/pdf`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded border px-4 py-2"
-            >
-            Print PDF
+          href={`/api/quotes/${id}/pdf`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded border px-4 py-2"
+        >
+          Print PDF
         </a>
 
         {/* Delete quote */}

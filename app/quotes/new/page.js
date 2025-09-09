@@ -28,6 +28,9 @@ export default function NewQuotePage() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // Customer Name useState
+  const [customerName, setCustomerName] = useState('');
+
   const toNumber = (v) => {
     const n = typeof v === 'string' && v.trim() === '' ? NaN : Number(v);
     return Number.isFinite(n) ? n : 0;
@@ -67,7 +70,50 @@ export default function NewQuotePage() {
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data?.error || 'Failed to create quote');
     setQuote(data);
+    setCustomerName(data?.customer || ''); // <- populate from server if present
     return data;
+  }
+
+  async function saveCustomerName(name) {
+    const next = (name ?? '').trim();
+    const current = (quote?.customer ?? '').trim();
+
+    // 1) No draft yet + empty input -> do nothing (avoid creating a draft)
+    if (!quote?.id && next === '') return;
+
+    // 2) Existing draft + no actual change -> do nothing
+    if (quote?.id && next === current) return;
+
+    try {
+      setErr('');
+
+      if (!quote?.id) {
+        // 3) Create the draft with initial customer (non-empty)
+        const r = await fetch('/api/quotes', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ customer: next }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.error || 'Failed to create quote');
+        setQuote(data);
+        setCustomerName(data?.customer || next);
+        return;
+      }
+
+      // 4) Update existing draft; allow clearing to NULL
+      const r = await fetch(`/api/quotes/${quote.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ customer: next === '' ? null : next }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || 'Failed to save customer name');
+
+      setQuote(prev => (prev ? { ...prev, customer: next } : data));
+    } catch (e) {
+      setErr(e.message || 'Failed to save customer name');
+    }
   }
 
   async function reloadItems(qid) {
@@ -193,6 +239,27 @@ export default function NewQuotePage() {
       <div className="mb-4 text-sm text-neutral-600">
         Quote #: {quote?.quote_number || (quote?.id ? `QUO-${String(quote.id).padStart(6,'0')}` : '— (not created yet)')}
         &nbsp;·&nbsp; Status: {quote?.status || 'draft (not saved yet)'}
+      </div>
+
+      {/* Customer name */}
+      <div className="mb-3 flex items-end gap-3">
+        <label className="grid gap-1">
+          <span className="text-sm">Customer name</span>
+          <input
+            type="text"
+            className="border rounded px-2 py-1 w-80"
+            value={customerName}
+            onChange={e => setCustomerName(e.target.value)}
+            onBlur={e => saveCustomerName(e.target.value)}   // autosave on blur
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+            placeholder="e.g., ACME Pty Ltd / John Smith"
+          />
+        </label>
+        {quote?.customer && (
+          <span className="text-xs text-neutral-600 mb-1">
+            Saved to quote #{quote?.quote_number || (quote?.id ? `QUO-${String(quote.id).padStart(6,'0')}` : '—')}
+          </span>
+        )}
       </div>
 
       {/* Markup controls */}

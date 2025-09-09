@@ -21,10 +21,12 @@ export async function GET(_req, { params }) {
     const qid = Number(id);
     if (!Number.isFinite(qid)) return jerr("invalid quote id");
 
-    // Quote header
+    // Quote header  🔹 CHANGED: include customer
     const q = await query(
-      `SELECT id, quote_number, COALESCE(status,'draft') AS status, created_at
-       FROM quotes WHERE id = ? LIMIT 1`,
+      `SELECT id, quote_number, COALESCE(status,'draft') AS status, customer, created_at
+         FROM quotes
+        WHERE id = ?
+        LIMIT 1`,
       [qid]
     );
     if (!q.rows?.length) return jerr("quote not found", 404);
@@ -69,6 +71,8 @@ export async function GET(_req, { params }) {
     const qno = quote.quote_number || `QUO-${String(quote.id).padStart(6, "0")}`;
     doc.text(`Quote #: ${qno}`);
     doc.text(`Status: ${quote.status}`);
+    // 🔹 NEW: show customer (fallback to em dash if empty)
+    doc.text(`Customer: ${quote.customer?.trim() ? quote.customer : "—"}`);
     if (quote.created_at) doc.text(`Created: ${quote.created_at}`);
     doc.moveDown(0.8);
 
@@ -86,12 +90,10 @@ export async function GET(_req, { params }) {
       cost:    0.10,
       markup:  0.11,
       sale:    0.10,
-      qty:     0.10, // small, but right-aligned
-      // line total will be derived (sale * qty) and shown under "Total"
+      qty:     0.10,
       total:   0.10,
     };
 
-    // Convert to pixel widths
     const cw = {};
     Object.keys(cols).forEach(k => cw[k] = Math.floor(cols[k] * contentWidth));
 
@@ -131,7 +133,6 @@ export async function GET(_req, { params }) {
     }
 
     function drawRow(row) {
-      // Compute each cell's height so the row height is max
       const pName = row.name ?? "";
       const sku = row.sku ?? "";
       const cost = Number(row.cost_price || 0);
@@ -145,10 +146,8 @@ export async function GET(_req, { params }) {
 
       maybePageBreak(cellH);
 
-      // Background stripes (optional)
       doc.rect(startX, y, contentWidth, cellH).fillOpacity(0.03).fill("#000000").fillOpacity(1);
 
-      // Draw cells
       let cx = startX;
 
       doc.fillColor("#000").text(pName, cx + 4, y + rowPadV, {
@@ -166,7 +165,6 @@ export async function GET(_req, { params }) {
         align: "right",
       }); cx += cw.cost;
 
-      // Markup % = derived from cost/sale (display only)
       const markupPct = cost > 0 ? ((sale - cost) / cost) * 100 : 0;
       doc.text(`${markupPct.toFixed(1)}%`, cx + 4, y + rowPadV, {
         width: cw.markup - 8,
