@@ -24,7 +24,7 @@ export async function GET(_req, { params }) {
     // Quote header  🔹 CHANGED: include customer
     const q = await query(
       `SELECT id, quote_number, COALESCE(status,'draft') AS status, customer, created_at
-         FROM quotes
+        FROM quotes
         WHERE id = ?
         LIMIT 1`,
       [qid]

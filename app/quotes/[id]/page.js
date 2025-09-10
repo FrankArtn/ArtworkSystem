@@ -16,6 +16,13 @@ export default function QuoteDetailPage({ params }) {
   const [deleted, setDeleted] = useState(false);
   const [delMsg, setDelMsg] = useState('');
 
+    // ✅ NEW: approval success state
+  const [approved, setApproved] = useState(false);
+  const [approvedMsg, setApprovedMsg] = useState('');
+
+  // ✅ NEW: control whether PDF button shows in the success panel
+  const [showPdfBtn, setShowPdfBtn] = useState(false);
+
   // black style that blends into background (no white borders)
   const blackBare =
     "rounded px-2 py-1 bg-black text-white placeholder:text-neutral-300 focus:outline-none";
@@ -37,7 +44,7 @@ export default function QuoteDetailPage({ params }) {
   }
 
   async function load() {
-    if (!Number.isFinite(id) || deleted) return; // ✅ stop fetching after delete
+    if (!Number.isFinite(id) || deleted || approved) return; // ✅ stop fetching after delete
     setErr('');
     try {
       const q = await fetch(`/api/quotes/${id}`, { cache: 'no-store' });
@@ -56,7 +63,7 @@ export default function QuoteDetailPage({ params }) {
       setErr(e.message || 'Failed to load');
     }
   }
-  useEffect(() => { load(); }, [id, deleted]); // ✅ watch `deleted`
+  useEffect(() => { load(); }, [id, deleted, approved]); // ✅ watch `deleted`
 
   async function updateItem(itemId, patch) {
     setErr('');
@@ -77,6 +84,27 @@ export default function QuoteDetailPage({ params }) {
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) { setErr(data?.error || 'Failed to update status'); return; }
+
+    // ✅ show approval success panel for your approve action
+    if (status === 'waiting_for_client_approval' || status === 'accepted' || status === 'won') {
+      const msg =
+        status === 'waiting_for_client_approval'
+          ? 'Submitted for client approval'
+          : 'Quote approved';
+      setApproved(true);
+      setApprovedMsg(msg);
+      setShowPdfBtn(true); 
+      return; // load() is skipped due to approved flag; keeps UX consistent with delete
+    }
+
+    // ✅ NEW: Redo → show the same panel but hide PDF button
+    if (status === 'redo') {
+      setApproved(true);
+      setApprovedMsg('Sent back to redo');  // message for redo
+      setShowPdfBtn(false);                 // 👈 hide PDF button on redo
+      return;
+    }
+
     await load();
   }
 
@@ -121,6 +149,38 @@ export default function QuoteDetailPage({ params }) {
       </div>
     );
   }
+
+  // ✅ NEW: Minimal approval success panel
+  if (approved) {
+    return (
+      <div className="max-w-6xl">
+        <h2 className="text-2xl font-semibold mb-3">Quote Review</h2>
+        <p className="text-green-700 mb-4">{approvedMsg || 'Successfully approved'}</p>
+        <div className="mt-5 flex flex-wrap gap-2">
+          {showPdfBtn && (
+          <a
+            href={`/api/quotes/${id}/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded border px-4 py-2"
+          >
+            Print PDF
+          </a>
+          )}
+          <button className="rounded border px-4 py-2" onClick={() => router.push('/quotes')}>
+            Back to list
+          </button>
+          <button
+            className="rounded border px-4 py-2"
+            onClick={() => { setApproved(false); load(); }} // continue editing
+          >
+            Continue editing
+          </button>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="max-w-6xl">
