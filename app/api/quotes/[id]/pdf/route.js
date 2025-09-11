@@ -21,10 +21,10 @@ export async function GET(_req, { params }) {
     const qid = Number(id);
     if (!Number.isFinite(qid)) return jerr("invalid quote id");
 
-    // Quote header  🔹 CHANGED: include customer
+    // Quote header (includes customer)
     const q = await query(
       `SELECT id, quote_number, COALESCE(status,'draft') AS status, customer, created_at
-        FROM quotes
+         FROM quotes
         WHERE id = ?
         LIMIT 1`,
       [qid]
@@ -32,7 +32,7 @@ export async function GET(_req, { params }) {
     if (!q.rows?.length) return jerr("quote not found", 404);
     const quote = q.rows[0];
 
-    // Items (be defensive about columns that may not exist)
+    // Items (keep cost in query defensively; we just won't render it)
     const pcols = await getCols("products");
     const qic   = await getCols("quote_items");
 
@@ -71,31 +71,28 @@ export async function GET(_req, { params }) {
     const qno = quote.quote_number || `QUO-${String(quote.id).padStart(6, "0")}`;
     doc.text(`Quote #: ${qno}`);
     doc.text(`Status: ${quote.status}`);
-    // 🔹 NEW: show customer (fallback to em dash if empty)
     doc.text(`Customer: ${quote.customer?.trim() ? quote.customer : "—"}`);
     if (quote.created_at) doc.text(`Created: ${quote.created_at}`);
     doc.moveDown(0.8);
 
-    // Table layout
+    // Table layout (Cost & Markup removed)
     const pageWidth = doc.page.width;
     const { left, right, top, bottom } = doc.page.margins;
     const contentWidth = pageWidth - left - right;
     const startX = left;
     let y = doc.y;
 
-    // Column widths (sum <= 1.0). Adjust if you need different proportions.
+    // Columns now: Product | SKU | Sale | Qty | Total (sum = 1.00)
     const cols = {
       product: 0.35,
       sku:     0.15,
-      //cost:    0.10,
-      //markup:  0.11,
       sale:    0.20,
       qty:     0.10,
       total:   0.20,
     };
 
     const cw = {};
-    Object.keys(cols).forEach(k => cw[k] = Math.floor(cols[k] * contentWidth));
+    Object.keys(cols).forEach(k => (cw[k] = Math.floor(cols[k] * contentWidth)));
 
     const headerHeight = 18;
     const rowPadV = 4;
@@ -106,27 +103,22 @@ export async function GET(_req, { params }) {
       if (y + neededHeight > maxY) {
         doc.addPage();
         y = top;
-        drawHeader(); // redraw header on new page
+        drawHeader();
       }
     }
 
     function drawHeader() {
       doc.font("Helvetica-Bold").fontSize(10);
-      const x = startX;
-      let cx = x;
+      let cx = startX;
       const h = headerHeight;
 
       doc.rect(startX, y, contentWidth, h).fillOpacity(0.05).fill("#000000").fillOpacity(1);
 
-      doc
-        .fillColor("#000")
-        .text("Product", cx + 4, y + 4, { width: cw.product - 8 }); cx += cw.product;
-      doc.text("SKU",     cx + 4, y + 4, { width: cw.sku - 8 });     cx += cw.sku;
-      //doc.text("Cost",    cx + 4, y + 4, { width: cw.cost - 8, align: "right" });   cx += cw.cost;
-      //doc.text("Markup %",cx + 4, y + 4, { width: cw.markup - 8, align: "right" }); cx += cw.markup;
-      doc.text("Sale",    cx + 4, y + 4, { width: cw.sale - 8, align: "right" });   cx += cw.sale;
-      doc.text("Qty",     cx + 4, y + 4, { width: cw.qty - 8, align: "right" });    cx += cw.qty;
-      doc.text("Total",   cx + 4, y + 4, { width: cw.total - 8, align: "right" });
+      doc.fillColor("#000").text("Product", cx + 4, y + 4, { width: cw.product - 8 }); cx += cw.product;
+      doc.text("SKU",   cx + 4, y + 4, { width: cw.sku - 8 });                           cx += cw.sku;
+      doc.text("Sale",  cx + 4, y + 4, { width: cw.sale - 8, align: "right" });          cx += cw.sale;
+      doc.text("Qty",   cx + 4, y + 4, { width: cw.qty - 8,  align: "right" });          cx += cw.qty;
+      doc.text("Total", cx + 4, y + 4, { width: cw.total - 8,align: "right" });
 
       y += h + rowGap;
       doc.font("Helvetica").fontSize(10);
@@ -134,10 +126,9 @@ export async function GET(_req, { params }) {
 
     function drawRow(row) {
       const pName = row.name ?? "";
-      const sku = row.sku ?? "";
-      //const cost = Number(row.cost_price || 0);
-      const sale = Number(row.sale_price || 0);
-      const qty  = Number(row.qty || 0);
+      const sku   = row.sku ?? "";
+      const sale  = Number(row.sale_price || 0);
+      const qty   = Number(row.qty || 0);
       const total = sale * qty;
 
       const hName = doc.heightOfString(pName, { width: cw.product - 8, align: "left" });
@@ -150,43 +141,11 @@ export async function GET(_req, { params }) {
 
       let cx = startX;
 
-      doc.fillColor("#000").text(pName, cx + 4, y + rowPadV, {
-        width: cw.product - 8,
-        align: "left",
-      }); cx += cw.product;
-
-      doc.text(sku || "—", cx + 4, y + rowPadV, {
-        width: cw.sku - 8,
-        align: "left",
-      }); cx += cw.sku;
-
-      /*
-      doc.text(`$${money(cost)}`, cx + 4, y + rowPadV, {
-        width: cw.cost - 8,
-        align: "right",
-      }); cx += cw.cost;
-
-      const markupPct = cost > 0 ? ((sale - cost) / cost) * 100 : 0;
-      doc.text(`${markupPct.toFixed(1)}%`, cx + 4, y + rowPadV, {
-        width: cw.markup - 8,
-        align: "right",
-      }); cx += cw.markup;
-      */
-
-      doc.text(`$${money(sale)}`, cx + 4, y + rowPadV, {
-        width: cw.sale - 8,
-        align: "right",
-      }); cx += cw.sale;
-
-      doc.text(String(qty), cx + 4, y + rowPadV, {
-        width: cw.qty - 8,
-        align: "right",
-      }); cx += cw.qty;
-
-      doc.text(`$${money(total)}`, cx + 4, y + rowPadV, {
-        width: cw.total - 8,
-        align: "right",
-      });
+      doc.fillColor("#000").text(pName, cx + 4, y + rowPadV, { width: cw.product - 8, align: "left" }); cx += cw.product;
+      doc.text(sku || "—",            cx + 4, y + rowPadV, { width: cw.sku - 8,     align: "left"  }); cx += cw.sku;
+      doc.text(`$${money(sale)}`,     cx + 4, y + rowPadV, { width: cw.sale - 8,    align: "right" }); cx += cw.sale;
+      doc.text(String(qty),           cx + 4, y + rowPadV, { width: cw.qty - 8,     align: "right" }); cx += cw.qty;
+      doc.text(`$${money(total)}`,    cx + 4, y + rowPadV, { width: cw.total - 8,   align: "right" });
 
       y += cellH + rowGap;
     }
