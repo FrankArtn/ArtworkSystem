@@ -10,7 +10,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className="antialiased">
+      <body className="min-h-screen bg-black text-white">
         <header style={{ borderBottom: "1px solid #eee", padding: "12px 20px", display: "flex", gap: 16, alignItems: "center" }}>
           <strong style={{ marginRight: 12 }}>Artwork System</strong>
           <nav style={{ display: "flex", gap: 12 }}>

@@ -23,6 +23,10 @@ export default function QuoteDetailPage({ params }) {
   // ✅ NEW: control whether PDF button shows in the success panel
   const [showPdfBtn, setShowPdfBtn] = useState(false);
 
+  // to show job_numbers after approve
+  const [createdJobs, setCreatedJobs] = useState([]); 
+
+
   // black style that blends into background (no white borders)
   const blackBare =
     "rounded px-2 py-1 bg-black text-white placeholder:text-neutral-300 focus:outline-none";
@@ -127,6 +131,34 @@ export default function QuoteDetailPage({ params }) {
     }
   }
 
+    async function handleAccepted() {
+    setErr('');
+    const r = await fetch(`/api/quotes/${id}/approve`, { method: 'POST' });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) { setErr(data?.error || 'Failed to approve'); return; }
+
+    setApproved(true);
+    setApprovedMsg('Quote accepted; jobs created');
+    setShowPdfBtn(true);
+    setCreatedJobs(Array.isArray(data.jobs) ? data.jobs : []);
+  }
+
+  async function handleDenied() {
+    setErr('');
+    const r = await fetch(`/api/quotes/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'denied' }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) { setErr(data?.error || 'Failed to deny'); return; }
+
+    setApproved(true);
+    setApprovedMsg('Quote denied');
+    setShowPdfBtn(false);
+    setCreatedJobs([]);
+  }
+
   const total = useMemo(
     () => items.reduce((s, it) => s + toNumber(it.sale_price) * toNumber(it.qty || 1), 0),
     [items]
@@ -156,6 +188,16 @@ export default function QuoteDetailPage({ params }) {
       <div className="max-w-6xl">
         <h2 className="text-2xl font-semibold mb-3">Quote Review</h2>
         <p className="text-green-700 mb-4">{approvedMsg || 'Successfully approved'}</p>
+
+        {/* ✅ Show created job numbers (from /approve response) */}
+        {createdJobs.length > 0 && (
+          <ul className="list-disc ml-5 text-sm">
+            {createdJobs.map(j => (
+              <li key={j.id}>Job #{j.job_number}{j.quote_item_id ? ` (item ${j.quote_item_id})` : ''}</li>
+            ))}
+          </ul>
+        )}
+
         <div className="mt-5 flex flex-wrap gap-2">
           {showPdfBtn && (
           <a
@@ -352,6 +394,17 @@ export default function QuoteDetailPage({ params }) {
           Back to list
         </button>
       </div>
+        {/* ✅ SHOW THESE ONLY WHEN WAITING FOR CLIENT */}
+        {quote?.status === 'waiting_for_client_approval' && (
+          <div className="mt-3 flex gap-2">
+            <button className="rounded border px-4 py-2" onClick={handleAccepted}>
+              Accepted
+            </button>
+            <button className="rounded border px-4 py-2" onClick={handleDenied}>
+              Denied
+            </button>
+          </div>
+        )}
     </div>
   );
 }
