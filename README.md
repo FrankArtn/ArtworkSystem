@@ -55,6 +55,52 @@ Run Local terminal: npm run dev
 
 Health path: /api/health.
 
+├── .DS_Store
+├── .gitignore
+├── app
+│   ├── api
+│   ├── 
+│   ├── favicon.ico
+│   ├── globals.css
+│   ├── layout.js
+│   ├── materials
+│   ├── orders
+│   ├── page.js
+│   └── quotes
+├── eslint.config.mjs
+├── jsconfig.json
+├── lib
+│   ├── db.js
+│   └── providers
+├── migrations
+│   ├── 0001_init.sql
+│   ├── 0002_add_wip_and_totals.sql
+│   ├── 0003_add_wip_qty.sql
+│   ├── 0004_add_stock_qty.sql
+│   ├── 0005_add_timestamps.sql
+│   ├── 0006_unallocated_and_view.sql
+│   ├── 0008_normalize_material_ids.js
+│   ├── 0009_job_numbers_and_wip_allocations.js
+│   ├── 0010_quotes_numbers_and_accept_flow.js
+│   ├── 0012_quote_items_and_approval.js
+│   └── 0013_quote_items_canonical.js
+├── next.config.mjs
+├── package-lock.json
+├── package.json
+├── postcss.config.mjs
+├── public
+│   ├── file.svg
+│   ├── globe.svg
+│   ├── next.svg
+│   ├── vercel.svg
+│   └── window.svg
+├── README.md
+└── scripts
+    ├── init-db.mjs
+    ├── inspect-table.js
+    ├── migrate.js
+    ├── patch-add-columns.js
+    └── seed.js
 
 
 
@@ -123,3 +169,4 @@ Just need to change 'DB_PROVIDER= [new provider]' in the .env.local file
 providers script is also ready in lib/providers
 employed one db access point in db.js in lib/ from the get go so that all db  queries use the getdb() method.
 In the future if db is changed will only need to change the hardcoded provider in getdb()
+
