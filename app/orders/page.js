@@ -1,6 +1,7 @@
 // app/orders/page.js
 'use client';
 import { useEffect, useState } from 'react';
+import { statusBadgeCls } from '@/app/components/statusBadgeCls';
 
 export default function OrdersPage() {
   const [rows, setRows] = useState([]);
@@ -38,8 +39,17 @@ export default function OrdersPage() {
             <tr><td colSpan={3} className="py-4 text-neutral-500">No orders yet.</td></tr>
           ) : rows.map(o => (
             <tr key={o.id} className="[&>td]:py-2 [&>td]:border-b">
-              <td>{o.job_number}</td>
-              <td>{o.status || 'open'}</td>
+              <td>
+                {o.job_number}
+                <span className="ml-2 text-neutral-400">
+                  {o.customer?.trim() ? `· ${o.customer}` : '· —'}
+                </span>
+              </td>
+              <td>
+                <span className={`inline-block px-2 py-0.5 rounded border ${statusBadgeCls(o.status)}`}>
+                  {o.status || 'open'}
+                </span>
+              </td>
               <td>{o.quote_number || (o.quote_id ? `QUO-${String(o.quote_id).padStart(6, '0')}` : '—')}</td>
             </tr>
           ))}

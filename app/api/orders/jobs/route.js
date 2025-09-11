@@ -25,7 +25,8 @@ export async function GET(req) {
           COALESCE(o.job_number, printf('JOB-%06d', o.id)) AS job_number,
           o.status,
           o.quote_id,
-          q.quote_number
+          q.quote_number,
+          q.customer
         FROM orders o
         LEFT JOIN quotes q ON q.id = o.quote_id
         ${where}
@@ -43,7 +44,8 @@ export async function GET(req) {
         SELECT
           o.id,
           COALESCE(o.job_number, printf('JOB-%06d', o.id)) AS job_number,
-          o.quote_id
+          o.quote_id,
+          NULL AS customer
         FROM orders o
         ${q ? `WHERE (COALESCE(o.job_number,'') LIKE ? OR CAST(o.id AS TEXT) LIKE ?)` : ""}
         ORDER BY o.id DESC

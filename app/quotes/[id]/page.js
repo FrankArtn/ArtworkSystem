@@ -2,6 +2,7 @@
 'use client';
 import { useEffect, useMemo, useState, use as usePromise } from 'react';
 import { useRouter } from 'next/navigation';
+import { statusBadgeCls } from '@/app/components/statusBadgeCls';
 
 export default function QuoteDetailPage({ params }) {
   const router = useRouter();
@@ -54,6 +55,13 @@ export default function QuoteDetailPage({ params }) {
       const q = await fetch(`/api/quotes/${id}`, { cache: 'no-store' });
       const qd = await q.json();
       if (!q.ok) throw new Error(qd?.error || 'Failed to load quote');
+
+      // ✅ If this quote is in "redo", jump straight to the editor
+      if (qd?.status === 'redo') {
+        router.push(`/quotes/new?quote=${id}`);
+        return; // stop: don't render the review view
+      }
+
       setQuote(qd);
 
       const r = await fetch(`/api/quotes/${id}/items`, { cache: 'no-store' });
@@ -106,6 +114,7 @@ export default function QuoteDetailPage({ params }) {
       setApproved(true);
       setApprovedMsg('Sent back to redo');  // message for redo
       setShowPdfBtn(false);                 // 👈 hide PDF button on redo
+      // router.push(`/quotes/new?quote=${id}`); //Push quote to new quotes page
       return;
     }
 
@@ -240,7 +249,10 @@ export default function QuoteDetailPage({ params }) {
       {quote && (
         <div className="mb-4 text-sm text-neutral-600">
           Quote #: {quote.quote_number || `QUO-${String(quote.id).padStart(6,'0')}`}
-          &nbsp;·&nbsp; Status: <span className="font-medium">{quote.status || 'draft'}</span>
+          &nbsp;·&nbsp; Status:{' '}
+          <span className={`inline-block px-2 py-0.5 rounded border ${statusBadgeCls(quote.status)}`}>
+            {quote.status || 'draft'}
+          </span>
           {/* (Optional) inline customer display instead of the separate line above:
               &nbsp;·&nbsp; Customer: <span className="font-medium">{quote.customer || '—'}</span>
           */}

@@ -14,7 +14,7 @@ export async function GET(req) {
 
     try {
       const sql = `
-        SELECT id, quote_number, status, created_at, updated_at
+        SELECT id, quote_number, status, customer, created_at, updated_at
         FROM quotes
         ${where}
         ORDER BY updated_at DESC, created_at DESC, id DESC
@@ -28,7 +28,7 @@ export async function GET(req) {
       if (!missingTs) throw e;
 
       const r2 = await query(
-        `SELECT id, quote_number, status FROM quotes ${where} ORDER BY id DESC LIMIT 200`,
+        `SELECT id, quote_number, status, customer FROM quotes ${where} ORDER BY id DESC LIMIT 200`,
         params
       );
       return NextResponse.json(r2.rows || []);

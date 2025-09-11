@@ -72,17 +72,19 @@ Health path: /api/health.
 │   │            ├── approve # Client approved and accept create one job_number per product line in quote
 │   │            ├── cleanup
 │   │            ├── items
-│   │            ├── pdf
-│   │            ├── status
-│   │            └── submit  #Submit for approval for new quotes tab  
+│   │            ├── pdf     # Print pdf settings
+│   │            ├── status  # Set status logic
+│   │            └── submit  # Submit for approval for new quotes tab  
 │   ├── favicon.ico
 │   ├── globals.css
 │   ├── layout.js
+│   ├── components
+│   │    └── statusBadgeCls.js #Controls the highlights of statuses
 │   ├── materials
 │   ├── orders
 │   └── quotes
-│        ├── [id]
-│        └── new
+│        ├── [id] # Review of individual quotes page
+│        └── new  # New quotes page
 ├── eslint.config.mjs
 ├── jsconfig.json
 ├── lib

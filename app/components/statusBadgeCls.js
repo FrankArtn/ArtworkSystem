@@ -1,0 +1,19 @@
+export function statusBadgeCls(s) {
+  const t = String(s || '').toLowerCase();
+
+  // Quotes
+  if (t === 'pending_approval' || t === 'waiting_for_client_approval') {
+    return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40';
+  }
+  if (t === 'redo') {
+    return 'bg-red-500/20 text-red-300 border-red-500/40';
+  }
+
+  // Orders
+  if (t === 'open') {
+    return 'bg-red-500/20 text-red-300 border-red-500/40';
+  }
+
+  // Default
+  return 'bg-white/10 text-white border-white/20';
+}

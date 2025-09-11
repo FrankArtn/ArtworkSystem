@@ -2,6 +2,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { statusBadgeCls } from '@/app/components/statusBadgeCls';
 
 export default function QuotesPage() {
   const [rows, setRows] = useState([]);
@@ -42,8 +43,17 @@ export default function QuotesPage() {
                 <Link className="text-blue-600 hover:underline" href={`/quotes/${q.id}`}>
                   {q.quote_number || `QUO-${String(q.id).padStart(6,'0')}`}
                 </Link>
+                {/* 👇 customer next to the number */}
+                <span className="ml-2 text-neutral-400">
+                  {q.customer?.trim() ? `· ${q.customer}` : '· —'}
+                </span>
               </td>
-              <td>{q.status || 'draft'}</td>
+              {/* ✅ badge */}
+              <td>
+                <span className={`inline-block px-2 py-0.5 rounded border ${statusBadgeCls(q.status)}`}>
+                  {q.status || 'draft'}
+                </span>
+              </td>
               <td>
                 <Link className="px-2 py-1 border rounded" href={`/quotes/${q.id}`}>
                   Review

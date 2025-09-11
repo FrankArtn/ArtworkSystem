@@ -1,9 +1,14 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { statusBadgeCls } from '@/app/components/statusBadgeCls';
+
 
 export default function NewQuotePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams?.get('quote'); // we pass ?quote=<id> from the redo redirect
+
   const [quote, setQuote] = useState(null);
   const [items, setItems] = useState([]);
   const [products, setProducts] = useState([]); // always an array
@@ -62,6 +67,27 @@ export default function NewQuotePage() {
       }
     })();
   }, []);
+
+  // ✅ New, separate effect: preload existing quote & items when coming from "redo"
+  useEffect(() => {
+    (async () => {
+      if (!editId || quote?.id) return; // nothing to do or already loaded
+      try {
+        const qr = await fetch(`/api/quotes/${editId}`, { cache: 'no-store' });
+        const qd = await qr.json().catch(() => null);
+        if (qr.ok && qd?.id) {
+          setQuote(qd);
+
+          // load items for this quote
+          const ir = await fetch(`/api/quotes/${qd.id}/items`, { cache: 'no-store' });
+          const idata = await ir.json().catch(() => []);
+          setItems(Array.isArray(idata) ? idata : []);
+          setMarkupEdits({});
+        }
+      } catch {}
+    })();
+  }, [editId, quote?.id]);
+
 
   // Create the draft only when actually needed (first add)
   async function ensureQuote() {
@@ -238,7 +264,10 @@ export default function NewQuotePage() {
       {err && <p className="text-red-600 mb-2">{err}</p>}
       <div className="mb-4 text-sm text-neutral-600">
         Quote #: {quote?.quote_number || (quote?.id ? `QUO-${String(quote.id).padStart(6,'0')}` : '— (not created yet)')}
-        &nbsp;·&nbsp; Status: {quote?.status || 'draft (not saved yet)'}
+        &nbsp;·&nbsp; Status:{' '}
+        <span className={`inline-block px-2 py-0.5 rounded border ${statusBadgeCls(quote?.status)}`}>
+          {quote?.status || 'draft (not saved yet)'}
+        </span>
       </div>
 
       {/* Customer name */}
