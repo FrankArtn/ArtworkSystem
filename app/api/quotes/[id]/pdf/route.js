@@ -86,12 +86,12 @@ export async function GET(_req, { params }) {
     // Column widths (sum <= 1.0). Adjust if you need different proportions.
     const cols = {
       product: 0.35,
-      sku:     0.12,
-      cost:    0.10,
-      markup:  0.11,
-      sale:    0.10,
+      sku:     0.15,
+      //cost:    0.10,
+      //markup:  0.11,
+      sale:    0.20,
       qty:     0.10,
-      total:   0.10,
+      total:   0.20,
     };
 
     const cw = {};
@@ -122,8 +122,8 @@ export async function GET(_req, { params }) {
         .fillColor("#000")
         .text("Product", cx + 4, y + 4, { width: cw.product - 8 }); cx += cw.product;
       doc.text("SKU",     cx + 4, y + 4, { width: cw.sku - 8 });     cx += cw.sku;
-      doc.text("Cost",    cx + 4, y + 4, { width: cw.cost - 8, align: "right" });   cx += cw.cost;
-      doc.text("Markup %",cx + 4, y + 4, { width: cw.markup - 8, align: "right" }); cx += cw.markup;
+      //doc.text("Cost",    cx + 4, y + 4, { width: cw.cost - 8, align: "right" });   cx += cw.cost;
+      //doc.text("Markup %",cx + 4, y + 4, { width: cw.markup - 8, align: "right" }); cx += cw.markup;
       doc.text("Sale",    cx + 4, y + 4, { width: cw.sale - 8, align: "right" });   cx += cw.sale;
       doc.text("Qty",     cx + 4, y + 4, { width: cw.qty - 8, align: "right" });    cx += cw.qty;
       doc.text("Total",   cx + 4, y + 4, { width: cw.total - 8, align: "right" });
@@ -135,7 +135,7 @@ export async function GET(_req, { params }) {
     function drawRow(row) {
       const pName = row.name ?? "";
       const sku = row.sku ?? "";
-      const cost = Number(row.cost_price || 0);
+      //const cost = Number(row.cost_price || 0);
       const sale = Number(row.sale_price || 0);
       const qty  = Number(row.qty || 0);
       const total = sale * qty;
@@ -160,6 +160,7 @@ export async function GET(_req, { params }) {
         align: "left",
       }); cx += cw.sku;
 
+      /*
       doc.text(`$${money(cost)}`, cx + 4, y + rowPadV, {
         width: cw.cost - 8,
         align: "right",
@@ -170,6 +171,7 @@ export async function GET(_req, { params }) {
         width: cw.markup - 8,
         align: "right",
       }); cx += cw.markup;
+      */
 
       doc.text(`$${money(sale)}`, cx + 4, y + rowPadV, {
         width: cw.sale - 8,

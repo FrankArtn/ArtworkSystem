@@ -38,6 +38,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 
 🔹 Stack & Hosting
+Language: JavaScript
 
 Framework: Next.js 15 (App Router, Turbopack, React 19, Node 20+).
 
