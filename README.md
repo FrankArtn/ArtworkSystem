@@ -59,19 +59,38 @@ Health path: /api/health.
 ├── .gitignore
 ├── app
 │   ├── api
-│   ├── 
+│   │   ├── health
+│   │   ├── materials
+│   │   │   ├── add
+│   │   │   └── transfer
+│   │   ├── orders
+│   │   │   └── jobs
+│   │   ├── products
+│   │   └── quotes         #Quotes list level
+│   │       └── [id]       #Quotes review level
+│   │            ├── accept  # Client approved and accept create one job_number for whole quote
+│   │            ├── approve # Client approved and accept create one job_number per product line in quote
+│   │            ├── cleanup
+│   │            ├── items
+│   │            ├── pdf
+│   │            ├── status
+│   │            └── submit  #Submit for approval for new quotes tab  
 │   ├── favicon.ico
 │   ├── globals.css
 │   ├── layout.js
 │   ├── materials
 │   ├── orders
-│   ├── page.js
 │   └── quotes
+│        ├── [id]
+│        └── new
 ├── eslint.config.mjs
 ├── jsconfig.json
 ├── lib
 │   ├── db.js
 │   └── providers
+│       ├── postgres.js
+│       ├── sqlite.js
+│       └── turso.js
 ├── migrations
 │   ├── 0001_init.sql
 │   ├── 0002_add_wip_and_totals.sql
