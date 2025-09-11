@@ -26,3 +26,9 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Insert a pipe before every link except the first */
+.pipe-nav a + a::before {
+  content: " | ";
+  color: #9ca3af; /* subtle grey on black */
+}
