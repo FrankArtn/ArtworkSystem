@@ -43,6 +43,7 @@ export default function OrdersPage() {
                 {o.job_number}
                 <span className="ml-2 text-neutral-400">
                   {o.customer?.trim() ? `· ${o.customer}` : '· —'}
+                  {o.product_name?.trim() ? ` · ${o.product_name}` : ''}
                 </span>
               </td>
               <td>

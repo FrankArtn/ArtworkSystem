@@ -5,7 +5,7 @@ export function statusBadgeCls(s) {
   if (t === 'pending_approval' || t === 'waiting_for_client_approval') {
     return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40';
   }
-  if (t === 'redo') {
+  if (t === 'redo' || t === 'draft') {
     return 'bg-red-500/20 text-red-300 border-red-500/40';
   }
 

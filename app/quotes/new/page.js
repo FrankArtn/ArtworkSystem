@@ -350,7 +350,7 @@ export default function NewQuotePage() {
         <button
           onClick={addItem}
           disabled={busy || !prodSel}
-          className="rounded bg-black text-white px-3 py-1 disabled:opacity-60"
+          className="px-2 py-1 border rounded"
         >
           {busy ? 'Adding…' : 'Add item'}
         </button>
