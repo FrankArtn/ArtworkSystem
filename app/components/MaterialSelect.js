@@ -1,68 +1,98 @@
+// app/components/MaterialSelect.js
 'use client';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 export default function MaterialSelect({
   items = [],
-  value = '',
-  onChange,
+  value,                // selected material id (string or number)
+  onChange,             // fn(nextId)
   label = 'Material',
   placeholder = 'Search name or SKU…',
   showStock = false,
-  showCost = false,
-  className = '',
+  showUnit = false,
+  className = ''
 }) {
   const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef(null);
 
-  const norm = (s) => String(s || '').toLowerCase();
+  // Normalize to string for comparisons
+  const valStr = value == null ? '' : String(value);
+
   const filtered = useMemo(() => {
-    const t = norm(q);
-    let arr = Array.isArray(items) ? items : [];
-    if (t) {
-      arr = arr.filter(m =>
-        norm(m.name).includes(t) ||
-        norm(m.sku).includes(t)
-      );
-    }
-    return arr.slice(0, 200);
+    const t = q.trim().toLowerCase();
+    if (!t) return items;
+    return items.filter(m => {
+      const name = String(m.name ?? '').toLowerCase();
+      const sku  = String(m.sku ?? '').toLowerCase();
+      const unit = String(m.unit ?? '').toLowerCase();
+      return name.includes(t) || sku.includes(t) || unit.includes(t);
+    });
   }, [items, q]);
 
-  return (
-    <div className={`grid gap-1 ${className}`}>
-      <span className="text-sm">{label}</span>
-      <div className="flex items-center gap-2">
-        <input
-          className="border rounded px-2 py-1 w-64"
-          value={q}
-          onChange={e => setQ(e.target.value)}
-          placeholder={placeholder}
-        />
-        {q && (
-          <button
-            type="button"
-            className="px-2 py-1 border rounded text-xs"
-            onClick={() => setQ('')}
-            title="Clear search"
-          >
-            Clear
-          </button>
-        )}
-      </div>
+  const selected = useMemo(
+    () => items.find(m => String(m.id) === valStr),
+    [items, valStr]
+  );
 
-      <select
-        className="border rounded px-2 py-1 w-64"
-        value={value}
-        onChange={e => onChange?.(e.target.value)}
-      >
-        <option value="">{q ? 'Select a filtered result' : 'Select material'}</option>
-        {filtered.map(m => (
-          <option key={m.id} value={String(m.id)}>
-            {m.name}
-            {m.sku ? ` (${m.sku})` : ''}
-            {showCost ? ` — $${Number(m.cost_price ?? 0).toFixed(2)}` : ''}
-            {showStock ? ` — Unalloc ${m.unallocated_stock ?? 0}` : ''}
-          </option>
-        ))}
-      </select>
+  function formatRow(m) {
+    const head = [m.name, m.sku ? `(${m.sku})` : null].filter(Boolean).join(' ');
+    const tailBits = [];
+    if (showUnit && m.unit) tailBits.push(m.unit);
+    if (showStock) tailBits.push(`Unalloc ${m.unallocated_stock ?? 0}`);
+    const tail = tailBits.length ? ` — ${tailBits.join(' · ')}` : '';
+    return head + tail;
+  }
+
+  function pick(m) {
+    onChange?.(String(m.id));
+    setQ('');
+    setOpen(false);
+  }
+
+  return (
+    <div className={`relative ${className}`} ref={boxRef}>
+      {label && <div className="text-sm mb-1">{label}</div>}
+
+      {/* Display selected label if any, otherwise the query */}
+      <input
+        type="text"
+        className="border rounded px-2 py-1 w-full bg-black text-white border-neutral-700"
+        placeholder={placeholder}
+        value={q || (selected ? formatRow(selected) : '')}
+        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 120)} // allow click
+      />
+
+      {open && (
+        <div className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded border border-neutral-700 bg-black text-white shadow-lg">
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-neutral-400">No materials</div>
+          ) : (
+            filtered.map(m => {
+              const isSel = String(m.id) === valStr;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`block w-full text-left px-3 py-2 hover:bg-white/10 ${isSel ? 'bg-white/5' : ''}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pick(m)}
+                  title={formatRow(m)}
+                >
+                  <div className="font-medium">{m.name} {m.sku ? <span className="text-neutral-400">({m.sku})</span> : null}</div>
+                  <div className="text-xs text-neutral-400">
+                    {showUnit && m.unit ? <span>{m.unit}</span> : null}
+                    {showUnit && showStock && m.unit ? <span> · </span> : null}
+                    {showStock ? <span>Unalloc {m.unallocated_stock ?? 0}</span> : null}
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
     </div>
   );
 }

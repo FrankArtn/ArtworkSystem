@@ -278,6 +278,7 @@ export default function MaterialsPage() {
               label="Material"
               placeholder="Search name or SKU…"
               showStock
+              className="w-82"
             />
 
             <input

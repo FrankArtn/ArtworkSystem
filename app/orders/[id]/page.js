@@ -281,6 +281,8 @@ export default function OrderDetailPage({ params }) {
                 label="Material"
                 placeholder="Search name or SKU…"
                 showStock
+                showUnit
+                className="w-95"
                 />
 
               </label>
