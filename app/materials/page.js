@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from "react";
+import MaterialSelect from '@/app/components/MaterialSelect';
 
 export default function MaterialsPage() {
   const [mats, setMats] = useState([]); // always an array
@@ -221,19 +222,15 @@ export default function MaterialsPage() {
         </summary>
         <div className="px-4 pb-4">
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              className="border rounded px-2 py-1"
-              value={selAdd}
-              onChange={e => setSelAdd(e.target.value)}
-            >
-              <option value="" disabled>Select material</option>
-              {rows.map(m => (
-                <option key={m.id} value={String(m.id)}>
-                  {m.name} — Unalloc {m.unallocated_stock ?? 0}
-                  {typeof m.cost_price === "number" ? ` @ $${Number(m.cost_price).toFixed(2)}` : ""}
-                </option>
-              ))}
-            </select>
+          <MaterialSelect
+            items={mats}
+            value={selAdd}
+            onChange={setSelAdd}
+            label="Material (add stock)"
+            placeholder="Search name or SKU…"
+            showStock
+            showCost
+          />
 
             <input
               type="number"
@@ -274,14 +271,14 @@ export default function MaterialsPage() {
         </summary>
         <div className="px-4 pb-4">
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              className="border rounded px-2 py-1"
+            <MaterialSelect
+              items={mats}
               value={sel}
-              onChange={e => setSel(e.target.value)}
-            >
-              <option value="" disabled>Select material</option>
-              {rows.map(m => <option key={m.id} value={String(m.id)}>{m.name}</option>)}
-            </select>
+              onChange={setSel}
+              label="Material"
+              placeholder="Search name or SKU…"
+              showStock
+            />
 
             <input
               type="number"
