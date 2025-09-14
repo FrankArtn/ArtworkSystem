@@ -17,7 +17,6 @@ export async function GET(req) {
     if (openOnly) whereParts.push(`LOWER(COALESCE(o.status,'')) IN ('open','in_progress')`);
     const where = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
 
-    // Try richer query (timestamps + join to quotes), then fall back if columns missing
     try {
       const sql = `
         SELECT
@@ -27,11 +26,12 @@ export async function GET(req) {
           o.quote_id,
           q.quote_number,
           q.customer,
-          p.name AS product_name
+          p.name AS product_name,
+          qi.qty AS qty                -- 👈 added
         FROM orders o
-        LEFT JOIN quotes q ON q.id = o.quote_id
+        LEFT JOIN quotes q       ON q.id  = o.quote_id
         LEFT JOIN quote_items qi ON qi.id = o.quote_item_id
-        LEFT JOIN products p ON p.id = qi.product_id
+        LEFT JOIN products p     ON p.id  = qi.product_id
         ${where}
         ORDER BY o.updated_at DESC, o.created_at DESC, o.id DESC
         LIMIT ${limit}
@@ -48,8 +48,11 @@ export async function GET(req) {
           o.id,
           COALESCE(o.job_number, printf('JOB-%06d', o.id)) AS job_number,
           o.quote_id,
+          o.status,
+          NULL AS quote_number,
           NULL AS customer,
-          NULL AS product_name
+          NULL AS product_name,
+          NULL AS qty            -- 👈 added for shape consistency
         FROM orders o
         ${q ? `WHERE (COALESCE(o.job_number,'') LIKE ? OR CAST(o.id AS TEXT) LIKE ?)` : ""}
         ORDER BY o.id DESC
