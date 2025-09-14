@@ -19,6 +19,16 @@ export function statusBadgeCls(s) {
     return 'bg-red-500/20 text-red-300 border-red-500/40';
   }
 
+  if (t === 'WIP') {
+    return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40';
+  }
+
+  if (t === 'complete') {
+    return 'bg-green-500/20 text-green-300 border-green-500/40';
+  }
+
+
+
   // Default
   return 'bg-white/10 text-white border-white/20';
 }

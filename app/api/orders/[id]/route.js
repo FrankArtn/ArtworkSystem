@@ -162,22 +162,44 @@ export async function PATCH(req, context) {
 
   const row = out.rows?.[0] ?? null;
 
-  // Apply the same legacy fallback as in GET
-  if (row && (!row.product_name || row.quote_item_id == null) && row.quote_id) {
+  // ✅ NEW: if all orders for this quote are done, mark the quote as complete
+  if (row?.quote_id) {
     try {
-      const itemsRes = await query(
+      const agg = await query(
         `SELECT
-           p.name AS product_name,
-           qi.qty AS qty
-         FROM quote_items qi
-         JOIN products p ON p.id = qi.product_id
-         WHERE qi.quote_id = ?
-         ORDER BY qi.id ASC`,
+           COUNT(1) AS total,
+           SUM(CASE WHEN LOWER(COALESCE(status,'')) IN ('complete','closed') THEN 1 ELSE 0 END) AS done
+         FROM orders
+         WHERE quote_id = ?`,
         [row.quote_id]
       );
-      row.items = itemsRes.rows || [];
-    } catch {}
+      const total = Number(agg.rows?.[0]?.total || 0);
+      const done  = Number(agg.rows?.[0]?.done  || 0);
+
+      if (total > 0 && done === total) {
+        await query(
+          `UPDATE quotes
+              SET status='complete',
+                  updated_at=CURRENT_TIMESTAMP
+            WHERE id=?`,
+          [row.quote_id]
+        );
+      }
+      // If you want to auto-demote when a job reopens, uncomment:
+      // else {
+      //   await query(
+      //     `UPDATE quotes
+      //         SET status = CASE WHEN LOWER(COALESCE(status,''))='complete' THEN 'approved' ELSE status END,
+      //             updated_at = CURRENT_TIMESTAMP
+      //       WHERE id=?`,
+      //     [row.quote_id]
+      //   );
+      // }
+    } catch {
+      // best-effort; don't block response
+    }
   }
 
   return NextResponse.json(row);
 }
+

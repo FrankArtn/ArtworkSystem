@@ -36,24 +36,65 @@ export async function GET(_req, { params }) {
   const pCols = new Set((pInfo.rows || []).map(r => r.name));
   const hasSku = pCols.has("sku");
 
-  const r = await query(
-    `
-    SELECT
-      qi.id, qi.quote_id, qi.product_id, qi.qty,
-      COALESCE(qi.sale_price,0) AS sale_price,
-      COALESCE(qi.cost_price,0) AS cost_price,
-      p.name AS product_name,
-      ${hasSku ? "p.sku" : "NULL AS sku"}
-    FROM quote_items qi
-    JOIN products p ON p.id = qi.product_id
-    WHERE qi.quote_id = ?
-    ORDER BY qi.id DESC
-    `,
-    [qid]
-  );
+  // Try with orders join (to get order_id + job_number + job_status),
+  // fall back to original shape if orders table is missing.
+  try {
+    const r = await query(
+      `
+      SELECT
+        qi.id,
+        qi.quote_id,
+        qi.product_id,
+        qi.qty,
+        COALESCE(qi.sale_price,0) AS sale_price,
+        COALESCE(qi.cost_price,0) AS cost_price,
+        p.name AS product_name,
+        ${hasSku ? "p.sku" : "NULL AS sku"},
+        o.id AS order_id,
+        COALESCE(o.job_number, printf('JOB-%06d', o.id)) AS job_number,
+        COALESCE(o.status, 'open') AS job_status
+      FROM quote_items qi
+      JOIN products p ON p.id = qi.product_id
+      LEFT JOIN orders o
+             ON o.quote_id = qi.quote_id
+            AND o.quote_item_id = qi.id
+      WHERE qi.quote_id = ?
+      ORDER BY qi.id DESC
+      `,
+      [qid]
+    );
+    return NextResponse.json(r.rows || []);
+  } catch (e) {
+    const msg = String(e?.message || "");
+    const missingOrders = /no such table:\s*orders/i.test(msg);
+    if (!missingOrders) throw e;
 
-  return NextResponse.json(r.rows || []);
+    // Fallback: no orders table — keep original shape, but include nulls for job fields
+    const r2 = await query(
+      `
+      SELECT
+        qi.id,
+        qi.quote_id,
+        qi.product_id,
+        qi.qty,
+        COALESCE(qi.sale_price,0) AS sale_price,
+        COALESCE(qi.cost_price,0) AS cost_price,
+        p.name AS product_name,
+        ${hasSku ? "p.sku" : "NULL AS sku"},
+        NULL AS order_id,
+        NULL AS job_number,
+        NULL AS job_status
+      FROM quote_items qi
+      JOIN products p ON p.id = qi.product_id
+      WHERE qi.quote_id = ?
+      ORDER BY qi.id DESC
+      `,
+      [qid]
+    );
+    return NextResponse.json(r2.rows || []);
+  }
 }
+
 
 export async function POST(req, { params }) {
   const { id } = await params; // Next 15: await params
@@ -88,7 +129,7 @@ export async function POST(req, { params }) {
   // Now safely read base cost
   const pr = await query(
     `SELECT ${costSel} AS base_cost FROM products WHERE id = ? LIMIT 1`,
-    [productId] // NOTE: must be an array, not an object
+    [productId]
   );
   if (!pr.rows?.length) return jerr("product not found", 404);
 

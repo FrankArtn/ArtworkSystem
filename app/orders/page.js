@@ -7,7 +7,7 @@ import { statusBadgeCls } from '@/app/components/statusBadgeCls';
 export default function OrdersPage() {
   const [rows, setRows] = useState([]);
   const [err, setErr] = useState('');
-  const [tab, setTab] = useState('pending'); // 'pending' | 'completed'
+  const [tab, setTab] = useState('pending'); // 'pending' | 'complete'  ← changed comment
 
   // Make "open" red; otherwise reuse your statusBadgeCls
   const orderBadgeCls = (s) => {
@@ -45,7 +45,7 @@ export default function OrdersPage() {
   );
 
   const filtered = useMemo(
-    () => rows.filter(o => (tab === 'completed' ? isCompleted(o.status) : !isCompleted(o.status))),
+    () => rows.filter(o => (tab === 'complete' ? isCompleted(o.status) : !isCompleted(o.status))), // ← 'complete'
     [rows, tab]
   );
 
@@ -68,10 +68,10 @@ export default function OrdersPage() {
         </button>
         <button
           type="button"
-          onClick={() => setTab('completed')}
-          className={`rounded px-3 py-1 border ${tab === 'completed' ? 'bg-white/10 border-white/30' : 'border-white/20'}`}
+          onClick={() => setTab('complete')} // ← 'complete'
+          className={`rounded px-3 py-1 border ${tab === 'complete' ? 'bg-white/10 border-white/30' : 'border-white/20'}`} // ← 'complete'
         >
-          Completed ({completedCount})
+          Complete ({completedCount}) {/* ← label */}
         </button>
       </div>
 
@@ -88,7 +88,7 @@ export default function OrdersPage() {
           {filtered.length === 0 ? (
             <tr>
               <td colSpan={4} className="py-4 text-neutral-500">
-                {tab === 'completed' ? 'No completed jobs.' : 'No pending jobs.'}
+                {tab === 'complete' ? 'No complete jobs.' : 'No pending jobs.'} {/* ← message */}
               </td>
             </tr>
           ) : filtered.map(o => (

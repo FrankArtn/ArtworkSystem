@@ -50,6 +50,8 @@ export async function PATCH(req, context) {
       "waiting_for_client_approval",
       "redo",
       "accepted",
+      "approved",
+      "complete",
       "won",
     ]);
     if (!allowed.has(status)) return jerr("unsupported status");
@@ -73,6 +75,35 @@ export async function PATCH(req, context) {
        FROM quotes WHERE id = ?`,
     [qid]
   );
+
+  // ✅ NEW: if this order is tied to a quote, and ALL orders for that quote are complete/closed, mark the quote as "won"
+  if (row?.quote_id) {
+    try {
+      const agg = await query(
+        `SELECT
+           COUNT(1) AS total,
+           SUM(CASE WHEN LOWER(COALESCE(status,'')) IN ('complete','closed') THEN 1 ELSE 0 END) AS done
+         FROM orders
+         WHERE quote_id = ?`,
+        [row.quote_id]
+      );
+      const total = Number(agg.rows?.[0]?.total || 0);
+      const done  = Number(agg.rows?.[0]?.done || 0);
+
+      if (total > 0 && done === total) {
+        await query(
+          `UPDATE quotes
+              SET status='complete',
+                  updated_at=CURRENT_TIMESTAMP
+            WHERE id = ?`,
+          [row.quote_id]
+        );
+      }
+    } catch {
+      // best-effort; don't block the response if this aggregation fails
+    }
+  }
+
   return NextResponse.json(out.rows?.[0] ?? null);
 }
 

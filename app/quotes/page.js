@@ -7,7 +7,7 @@ import { statusBadgeCls } from '@/app/components/statusBadgeCls';
 export default function QuotesPage() {
   const [rows, setRows] = useState([]);
   const [err, setErr] = useState('');
-  const [tab, setTab] = useState('pending'); // 'approved' | 'pending'
+  const [tab, setTab] = useState('pending'); // 'pending' | 'approved' | 'complete'
 
   async function load() {
     setErr('');
@@ -22,18 +22,34 @@ export default function QuotesPage() {
   }
   useEffect(() => { load(); }, []);
 
+  // Helpers
+  const isApproved = (s) => String(s || '').toLowerCase() === 'approved';
+  // If you sometimes use 'won' for finished quotes, include it here as well.
+  const isComplete = (s) => {
+    const t = String(s || '').toLowerCase();
+    return t === 'complete' /* || t === 'won' */;
+  };
+
   const approvedCount = useMemo(
-    () => rows.filter(q => String(q.status || '').toLowerCase() === 'approved').length,
+    () => rows.filter(q => isApproved(q.status)).length,
+    [rows]
+  );
+  const completeCount = useMemo(
+    () => rows.filter(q => isComplete(q.status)).length,
     [rows]
   );
   const pendingCount = useMemo(
-    () => rows.length - approvedCount,
-    [rows, approvedCount]
+    () => rows.length - approvedCount - completeCount,
+    [rows, approvedCount, completeCount]
   );
 
   const filtered = useMemo(() => {
-    const isApproved = (s) => String(s || '').toLowerCase() === 'approved';
-    return rows.filter(q => tab === 'approved' ? isApproved(q.status) : !isApproved(q.status));
+    return rows.filter(q => {
+      if (tab === 'approved') return isApproved(q.status);
+      if (tab === 'complete') return isComplete(q.status);
+      // pending: not approved and not complete
+      return !isApproved(q.status) && !isComplete(q.status);
+    });
   }, [rows, tab]);
 
   return (
@@ -57,6 +73,13 @@ export default function QuotesPage() {
         >
           Approved ({approvedCount})
         </button>
+        <button
+          type="button"
+          onClick={() => setTab('complete')}
+          className={`rounded px-3 py-1 border ${tab === 'complete' ? 'bg-white/10 border-white/30' : 'border-white/20'}`}
+        >
+          Complete ({completeCount})
+        </button>
       </div>
 
       <table className="w-full border-collapse">
@@ -71,7 +94,11 @@ export default function QuotesPage() {
           {filtered.length === 0 ? (
             <tr>
               <td colSpan={3} className="py-4 text-neutral-500">
-                {tab === 'approved' ? 'No approved quotes yet.' : 'No pending quotes.'}
+                {tab === 'approved'
+                  ? 'No approved quotes yet.'
+                  : tab === 'complete'
+                  ? 'No complete quotes yet.'
+                  : 'No pending quotes.'}
               </td>
             </tr>
           ) : filtered.map(q => (
@@ -101,3 +128,4 @@ export default function QuotesPage() {
     </div>
   );
 }
+
