@@ -162,41 +162,143 @@ export async function PATCH(req, context) {
 
   const row = out.rows?.[0] ?? null;
 
-  // ✅ NEW: if all orders for this quote are done, mark the quote as complete
+    // ✅ When a job is completed/closed, consume its WIP allocations (but keep a history):
+  if (row && (String(row.status).toLowerCase() === 'complete' || String(row.status).toLowerCase() === 'closed')) {
+    try {
+      // Get this job's number
+      const jr = await query(`SELECT job_number FROM orders WHERE id = ? LIMIT 1`, [oid]);
+      const jobNum = jr.rows?.[0]?.job_number;
+      if (jobNum) {
+        // 1) Sum allocations by material for this job
+        const sums = await query(
+          `SELECT material_id, SUM(COALESCE(qty,0)) AS qty
+            FROM wip_allocations
+            WHERE job_number = ?
+            GROUP BY material_id`,
+          [jobNum]
+        );
+
+        // 2) For each material, reduce wip_qty (guard against negative)
+        for (const s of (sums.rows || [])) {
+          const mid = s.material_id;
+          const useQty = Number(s.qty || 0);
+          if (!mid || !(useQty > 0)) continue;
+
+          await query(
+            `UPDATE materials
+                SET wip_qty    = CASE
+                                  WHEN COALESCE(wip_qty,0) >= ?
+                                  THEN COALESCE(wip_qty,0) - ?
+                                  ELSE 0
+                                END,
+                    updated_at = CURRENT_TIMESTAMP
+              WHERE id = ?`,
+            [useQty, useQty, mid]
+          );
+        }
+
+       // 3) Mark allocations as consumed (keep rows so the job page can still show them)
+      try {
+        // Ensure a consumed_at column exists on wip_allocations
+        try {
+          const info = await query(`PRAGMA table_info(wip_allocations)`);
+          const hasConsumedAt = (info.rows || []).some(
+            c => String(c.name).toLowerCase() === 'consumed_at'
+          );
+          if (!hasConsumedAt) {
+            await query(`ALTER TABLE wip_allocations ADD COLUMN consumed_at TEXT`);
+          }
+        } catch (_) {
+          // ignore if PRAGMA/ALTER fails (SQLite variants differ)
+        }
+
+        // (Optional) keep your archive table for history analytics
+        try {
+          await query(`
+            CREATE TABLE IF NOT EXISTS consumed_allocations (
+              id           INTEGER PRIMARY KEY AUTOINCREMENT,
+              material_id  INTEGER NOT NULL,
+              job_number   TEXT    NOT NULL,
+              qty          REAL    NOT NULL,
+              unit_cost    REAL,
+              created_at   TEXT,
+              archived_at  TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+          `);
+
+          // Copy from WIP to archive (preserve original created_at)
+          await query(
+            `INSERT INTO consumed_allocations (material_id, job_number, qty, unit_cost, created_at)
+              SELECT material_id, job_number, qty, unit_cost, created_at
+                FROM wip_allocations
+                WHERE job_number = ?`,
+            [jobNum]
+          );
+        } catch (_) {
+          // best-effort; non-fatal
+        }
+
+        // ✅ Instead of DELETE, stamp consumed_at so the rows remain visible on the job page
+        await query(
+          `UPDATE wip_allocations
+              SET consumed_at = COALESCE(consumed_at, CURRENT_TIMESTAMP)
+            WHERE job_number = ?`,
+          [jobNum]
+        );
+        } catch (_) {
+          // best-effort; don't block the response if this fails
+        }
+      }
+    } catch (e) {
+      // best-effort; don't fail the PATCH if inventory ops hit a missing table/column
+      const msg = String(e?.message || "");
+      const ignorable =
+        /no such table:\s*wip_allocations/i.test(msg) ||
+        /no such table:\s*materials/i.test(msg) ||
+        /no such column:/i.test(msg);
+      if (!ignorable) {
+        // console.error("consume WIP on complete failed:", e);
+      }
+    }
+  }
+
+  // ✅ NEW: If this order belongs to a quote, and all *relevant* jobs are done, mark the quote complete.
+  // Relevant = jobs not CANCELLED. Done = COMPLETE / COMPLETED / CLOSED.
   if (row?.quote_id) {
     try {
       const agg = await query(
         `SELECT
-           COUNT(1) AS total,
-           SUM(CASE WHEN LOWER(COALESCE(status,'')) IN ('complete','closed') THEN 1 ELSE 0 END) AS done
-         FROM orders
-         WHERE quote_id = ?`,
+          SUM(CASE WHEN LOWER(COALESCE(status,'')) NOT IN ('cancelled') THEN 1 ELSE 0 END) AS relevant,
+          SUM(CASE WHEN LOWER(COALESCE(status,'')) IN ('complete','completed','closed') THEN 1 ELSE 0 END) AS done
+        FROM orders
+        WHERE quote_id = ?`,
         [row.quote_id]
       );
-      const total = Number(agg.rows?.[0]?.total || 0);
-      const done  = Number(agg.rows?.[0]?.done  || 0);
 
-      if (total > 0 && done === total) {
+      const relevant = Number(agg.rows?.[0]?.relevant || 0);
+      const done     = Number(agg.rows?.[0]?.done || 0);
+
+      if (relevant > 0 && done === relevant) {
         await query(
           `UPDATE quotes
               SET status='complete',
                   updated_at=CURRENT_TIMESTAMP
-            WHERE id=?`,
+            WHERE id = ?`,
           [row.quote_id]
         );
       }
-      // If you want to auto-demote when a job reopens, uncomment:
+      // Optional “demote” logic if a job reopens later:
       // else {
       //   await query(
       //     `UPDATE quotes
       //         SET status = CASE WHEN LOWER(COALESCE(status,''))='complete' THEN 'approved' ELSE status END,
       //             updated_at = CURRENT_TIMESTAMP
-      //       WHERE id=?`,
+      //       WHERE id = ?`,
       //     [row.quote_id]
       //   );
       // }
-    } catch {
-      // best-effort; don't block response
+    } catch (_) {
+      // best-effort — don't block response
     }
   }
 

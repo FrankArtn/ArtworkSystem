@@ -15,6 +15,11 @@ export default function QuoteDetailPage({ params }) {
   const { id: rawId } = usePromise(params);
   const id = useMemo(() => Number(rawId), [rawId]);
   const isApproved = String(quote?.status || '').toLowerCase() === 'approved';
+  // consider these as "complete"
+  const isComplete = useMemo(() => {
+    const s = String(quote?.status || '').toLowerCase();
+    return s === 'complete' || s === 'completed' || s === 'won' || s === 'closed';
+  }, [quote?.status]);
 
 
   // ✅ NEW: local state to show success panel after deletion
@@ -357,7 +362,7 @@ export default function QuoteDetailPage({ params }) {
 
                   {/* Markup % (editable) unless approved */}
                   <td>
-                    {isApproved ? (
+                    {isApproved || isComplete ? (
                       // read-only pill when approved
                       <div className={`${blackBare} border border-transparent w-24 text-right`}>
                         {Number.isFinite(currentPct) ? currentPct.toFixed(1) : '0.0'}%
@@ -415,45 +420,69 @@ export default function QuoteDetailPage({ params }) {
       </table>
 
       <div className="mt-5 flex flex-wrap gap-2">
-        {/* a) Edit, save then approve → waiting_for_client_approval */}
-        <button
-          className="rounded border px-4 py-2"
-          onClick={() => setStatus('waiting_for_client_approval')}
-        >
-          Save & Approve (wait for client)
-        </button>
+        {isComplete ? (
+          <>
+            {/* Only show Print + Back when complete */}
+            <a
+              href={`/api/quotes/${id}/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded border px-4 py-2"
+            >
+              Print PDF
+            </a>
+            <button className="rounded border px-4 py-2" onClick={() => router.push('/quotes')}>
+              Back to list
+            </button>
+          </>
+        ) : (
+          <>
+            {/* a) Save & Approve is hidden if status is already "approved" */}
+            {!isApproved && (
+              <button
+                className="rounded border px-4 py-2"
+                onClick={() => setStatus('waiting_for_client_approval')}
+              >
+                Save & Approve (wait for client)
+              </button>
+            )}
 
-        {/* b) Send back to redo */}
-        <button
-          className="rounded border px-4 py-2"
-          onClick={() => setStatus('redo')}
-        >
-          Send back to redo
-        </button>
+            {/* b) Send back to redo — also hidden when approved */}
+            {!isApproved && (
+              <button
+                className="rounded border px-4 py-2"
+                onClick={() => setStatus('redo')}
+              >
+                Send back to redo
+              </button>
+            )}
 
-        {/* c) Approve & PDF (opens in new tab) */}
-        <a
-          href={`/api/quotes/${id}/pdf`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="rounded border px-4 py-2"
-        >
-          Print PDF
-        </a>
+            {/* c) Print PDF (always visible in this branch) */}
+            <a
+              href={`/api/quotes/${id}/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded border px-4 py-2"
+            >
+              Print PDF
+            </a>
 
-        {/* Delete quote */}
-        <button
-          onClick={deleteQuote}
-          disabled={deleting}
-          className="rounded border px-4 py-2 disabled:opacity-60"
-        >
-          {deleting ? 'Deleting…' : 'Delete quote'}
-        </button>
+            {/* Delete quote */}
+            <button
+              onClick={deleteQuote}
+              disabled={deleting}
+              className="rounded border px-4 py-2 disabled:opacity-60"
+            >
+              {deleting ? 'Deleting…' : 'Delete quote'}
+            </button>
 
-        <button className="rounded border px-4 py-2" onClick={() => router.push('/quotes')}>
-          Back to list
-        </button>
+            <button className="rounded border px-4 py-2" onClick={() => router.push('/quotes')}>
+              Back to list
+            </button>
+          </>
+        )}
       </div>
+
         {/* ✅ SHOW THESE ONLY WHEN WAITING FOR CLIENT */}
         {quote?.status === 'waiting_for_client_approval' && (
           <div className="mt-3 flex gap-2">

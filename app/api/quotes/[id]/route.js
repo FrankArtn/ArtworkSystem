@@ -110,76 +110,132 @@ export async function PATCH(req, context) {
 /**
  * DELETE /api/quotes/[id]
  *
- * Two modes:
- *  - Conditional cleanup for empty drafts: add ?emptyOnly=1
- *      Deletes only if status='draft' AND no quote_items exist.
- *  - Full delete (default): deletes quote + items, but blocks if any orders exist.
+ * Modes:
+ *  - ?emptyOnly=1 → delete only empty drafts (unchanged).
+ *  - Default      → delete the quote (+ items). If jobs exist:
+ *      • BLOCK when any job is in WIP/complete/closed OR has material allocations.
+ *      • Otherwise:
+ *          - If quote is approved/accepted → cascade delete those jobs.
+ *          - If quote is not approved/accepted → BLOCK (same as before).
  */
 export async function DELETE(req, context) {
   const { id } = await context.params;
   const qid = Number(id);
   if (!Number.isFinite(qid)) return jerr("invalid quote id");
 
-  // Check existence + current status
-  const exist = await query(
+  // Load quote + status
+  const qr = await query(
     `SELECT id, COALESCE(status,'draft') AS status FROM quotes WHERE id=? LIMIT 1`,
     [qid]
   );
-  if (!exist.rows?.length) return jerr("quote not found", 404);
-  const status = String(exist.rows[0].status || "draft").toLowerCase();
+  if (!qr.rows?.length) return jerr("quote not found", 404);
+  const quoteStatus = String(qr.rows[0].status || "draft").toLowerCase();
 
   // Parse emptyOnly flag
   const url = new URL(req.url);
-  const emptyOnlyParam = (url.searchParams.get("emptyOnly") || "").toLowerCase();
-  const emptyOnly = ["1", "true", "yes"].includes(emptyOnlyParam);
+  const emptyOnly = ["1","true","yes"].includes((url.searchParams.get("emptyOnly")||"").toLowerCase());
 
-  // Count items (be tolerant if quote_items doesn't exist)
+  // Count items for emptyOnly mode (tolerant if table missing)
   let hasItems = false;
   try {
     const ic = await query(`SELECT COUNT(1) AS c FROM quote_items WHERE quote_id=?`, [qid]);
     hasItems = Number(ic.rows?.[0]?.c || 0) > 0;
   } catch (e) {
-    const msg = String(e?.message || "");
-    if (!/no such table:\s*quote_items/i.test(msg)) throw e;
-    hasItems = false;
+    if (!/no such table:\s*quote_items/i.test(String(e?.message||""))) throw e;
   }
 
   if (emptyOnly) {
-    // Beacon/cleanup mode: only delete empty drafts
-    if (status === "draft" && !hasItems) {
+    if (quoteStatus === "draft" && !hasItems) {
       await query(`DELETE FROM quotes WHERE id=?`, [qid]);
       return NextResponse.json({ deleted: 1, mode: "empty-only" }, { status: 200 });
     }
     return NextResponse.json(
-      { deleted: 0, mode: "empty-only", reason: status !== "draft" ? "not-draft" : "has-items" },
+      { deleted: 0, mode: "empty-only", reason: quoteStatus !== "draft" ? "not-draft" : "has-items" },
       { status: 200 }
     );
   }
 
-  // Full delete path: block if orders exist
-  const or = await query(`SELECT COUNT(1) AS c FROM orders WHERE quote_id = ?`, [qid]);
-  if (Number(or.rows?.[0]?.c || 0) > 0) {
-    return jerr(
-      "Cannot delete: one or more orders were created for this quote. Delete those orders first.",
-      409
-    );
-  }
+  // Fetch related jobs
+  const jr = await query(
+    `SELECT id, job_number, LOWER(COALESCE(status,'')) AS status
+       FROM orders
+      WHERE quote_id = ?`,
+    [qid]
+  );
+  const jobs = jr.rows || [];
+  const jobCount = jobs.length;
 
-  // No explicit BEGIN/COMMIT (libsql HTTP client sessions aren't sticky). Do sequential deletes.
-  try {
-    // Delete items first; ignore if quote_items table doesn't exist
-    try {
-      await query(`DELETE FROM quote_items WHERE quote_id = ?`, [qid]);
-    } catch (e) {
-      const msg = String(e?.message || "");
-      if (!/no such table:\s*quote_items/i.test(msg)) throw e;
+  // If jobs exist, check WIP/Complete and allocations
+  let anyWipOrDone = false;
+  if (jobCount > 0) {
+    anyWipOrDone = jobs.some(j =>
+      j.status === "in_progress" || j.status === "complete" || j.status === "closed"
+    );
+
+    // Check allocations by job_number (only for jobs that actually have a job_number)
+    const jobNums = jobs.map(j => String(j.job_number || "")).filter(Boolean);
+    let allocCount = 0;
+    if (jobNums.length) {
+      const placeholders = jobNums.map(() => "?").join(",");
+      try {
+        const ar = await query(
+          `SELECT COUNT(1) AS c
+             FROM wip_allocations
+            WHERE job_number IN (${placeholders})`,
+          jobNums
+        );
+        allocCount = Number(ar.rows?.[0]?.c || 0);
+      } catch (e) {
+        // If the allocations table doesn't exist, treat as no allocations
+        if (!/no such table:\s*wip_allocations/i.test(String(e?.message||""))) throw e;
+      }
     }
 
-    // Then delete the quote itself
-    await query(`DELETE FROM quotes WHERE id = ?`, [qid]);
+    // BLOCK deletion if any job is WIP/done OR has any allocations
+    if (anyWipOrDone || allocCount > 0) {
+      return jerr(
+        "Cannot delete: one or more jobs are in WIP/complete/closed or have materials allocated. " +
+        "Deallocate materials and return jobs to 'open' to delete.",
+        409
+      );
+    }
+  }
+
+  // If we get here and jobs exist:
+  // - Allow cascade only when quote is approved/accepted
+  if (jobCount > 0) {
+    const canCascade = quoteStatus === "approved" || quoteStatus === "accepted";
+    if (!canCascade) {
+      return jerr(
+        "Cannot delete: jobs exist for this quote. Only approved/accepted quotes can be deleted automatically " +
+        "with their jobs (when none are WIP/complete and no allocations exist).",
+        409
+      );
+    }
+  }
+
+  // Proceed with deletes (sequential; no explicit txn)
+  try {
+    // 1) Delete items (ignore if table missing)
+    try { await query(`DELETE FROM quote_items WHERE quote_id=?`, [qid]); }
+    catch (e) { if (!/no such table:\s*quote_items/i.test(String(e?.message||""))) throw e; }
+
+    // 2) If allowed, delete jobs for this quote
+    if (jobCount > 0) {
+      await query(`DELETE FROM orders WHERE quote_id=?`, [qid]);
+      // (NOTE) We intentionally do NOT delete wip_allocations here — they shouldn't exist
+      // because we blocked earlier if any allocation was present.
+    }
+
+    // 3) Delete the quote
+    await query(`DELETE FROM quotes WHERE id=?`, [qid]);
   } catch (e) {
     return jerr(e?.message || "Failed to delete quote", 500);
   }
 
-  return NextResponse.json({ deleted: 1, mode: "full" }, { status: 200 });
+  return NextResponse.json(
+    { deleted: 1, mode: "full", cascadedJobs: jobCount },
+    { status: 200 }
+  );
 }
+

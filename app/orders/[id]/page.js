@@ -106,6 +106,22 @@ export default function OrderDetailPage({ params }) {
     }
   }
 
+  async function handleMarkComplete() {
+    if (order?.status === 'complete') return; // already complete
+    const job = order?.job_number || `JOB-${String(order?.id || '').padStart(6,'0')}`;
+    const ok = window.confirm(
+      `Mark ${job} as COMPLETE?\n\n` +
+      `Are you sure?\n` +
+      `This will set the job status to "complete". If all jobs for the quote are complete, ` +
+      `the quote may be auto-updated too.`
+    );
+    if (!ok) return;
+    await patchOrderStatus('complete');
+
+    // 🔁 Refresh allocations + materials list so the WIP table/selector updates right away
+    await Promise.all([loadAllocations(), loadMaterialsList()]);
+  }
+
   // Add material to THIS job → calls your /api/materials/transfer
   async function addMaterialToJob() {
     if (!order?.job_number) { setErr('Missing job number'); return; }
@@ -317,7 +333,7 @@ export default function OrderDetailPage({ params }) {
             <button
               className="rounded border px-4 py-2 disabled:opacity-60"
               disabled={updating || order?.status === 'complete'}
-              onClick={() => patchOrderStatus('complete')}
+              onClick={handleMarkComplete}
             >
               {order?.status === 'complete' ? 'Completed' : 'Mark Complete'}
             </button>
