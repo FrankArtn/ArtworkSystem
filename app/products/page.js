@@ -1,0 +1,74 @@
+// app/products/page.js
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+
+export default function ProductsPage() {
+  const [rows, setRows] = useState([]);
+  const [err, setErr] = useState('');
+
+  const num   = (x) => { const n = Number(x); return Number.isFinite(n) ? n : 0; };
+  const money = (n) => num(n).toFixed(2);
+
+  async function load() {
+    setErr('');
+    try {
+      const r = await fetch('/api/products', { cache: 'no-store' });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error || 'Failed to load products');
+      setRows(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setErr(e.message || 'Failed to load products');
+    }
+  }
+  useEffect(() => { load(); }, []);
+
+  return (
+    <div className="max-w-5xl">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-2xl font-semibold">Products</h2>
+        <Link href="/products/new" className="rounded border px-3 py-1">
+          New Product
+        </Link>
+      </div>
+
+      {err && <p className="text-red-600 mb-2">{err}</p>}
+
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="[&>th]:text-left [&>th]:py-2 [&>th]:border-b">
+            <th>ID</th>
+            <th>Name</th>
+            <th>SKU</th>
+            <th>Unit</th>
+            <th>Base setup</th>
+            <th>Cost price</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={7} className="py-4 text-neutral-500">
+                No products yet.
+              </td>
+            </tr>
+          ) : rows.map(p => (
+            <tr key={p.id} className="[&>td]:py-2 [&>td]:border-b">
+              <td>{p.id}</td>
+              <td>{p.name || '—'}</td>
+              <td>{p.sku || '—'}</td>
+              <td>{p.unit || '—'}</td>
+              <td>
+                {p.base_setup_cost != null ? `$${money(p.base_setup_cost)}` : '—'}
+              </td>
+              <td>
+                {p.cost_price != null ? `$${money(p.cost_price)}` : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

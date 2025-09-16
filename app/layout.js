@@ -16,6 +16,7 @@ export default function RootLayout({ children }) {
           {/* 👇 add a class for the pipe styling */}
           <nav className="pipe-nav" style={{ display: "flex", gap: 12 }}>
             <Link href="/">Home</Link>
+            <Link href="/products" className="hover:underline">Products</Link>
             <Link href="/quotes/new">New Quote</Link>
             <Link href="/quotes">Quotes</Link>
             <Link href="/orders">Orders</Link>
