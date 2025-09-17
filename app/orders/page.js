@@ -110,7 +110,11 @@ export default function OrdersPage() {
                   {o.status || 'open'}
                 </span>
               </td>
-              <td>{humanQuoteNum(o)}</td>
+              <td>
+                 <Link href={`/quotes/${o.quote_id}`} className="text-blue-400 hover:underline">
+                {humanQuoteNum(o)}
+                </Link>
+                </td>
               <td>
                 <Link className="px-2 py-1 border rounded" href={`/orders/${o.id}`}>
                   View

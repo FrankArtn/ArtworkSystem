@@ -54,6 +54,8 @@ Start: npm run db:migrate && npm start
 
 Run Local terminal: npm run dev
 
+Migration: npm run db:migrate
+
 Health path: /api/health.
 
 ├── .DS_Store

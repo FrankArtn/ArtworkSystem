@@ -142,3 +142,39 @@ export async function POST(req) {
     );
   }
 }
+
+export const dynamic = "force-dynamic";
+const jerr = (msg, code = 400) => NextResponse.json({ error: msg }, { status: code });
+export async function DELETE(_req, context) {
+  const { id } = await context.params;
+  const pid = Number(id);
+  if (!Number.isFinite(pid)) return jerr("invalid product id");
+
+  // Optional safety: block deletion if product is referenced by quotes/jobs
+  try {
+    const ref = await query(`
+      SELECT
+        (SELECT COUNT(1) FROM quote_items WHERE product_id = ?) AS qi_count,
+        (SELECT COUNT(1) FROM orders
+           WHERE quote_item_id IN (SELECT id FROM quote_items WHERE product_id = ?)
+        ) AS order_count
+    `, [pid, pid]);
+
+    const qi = Number(ref.rows?.[0]?.qi_count || 0);
+    const ord = Number(ref.rows?.[0]?.order_count || 0);
+    if (qi > 0 || ord > 0) {
+      return jerr("This product is used by existing quotes/jobs and cannot be deleted.", 409);
+    }
+  } catch {
+    // If those tables don't exist, skip the pre-check
+  }
+
+  const r = await query(`DELETE FROM products WHERE id = ?`, [pid]);
+
+  const affected =
+    r?.rowsAffected ?? r?.rows_affected ?? r?.affectedRows ?? 0;
+
+  if (!affected) return jerr("product not found", 404);
+
+  return NextResponse.json({ ok: true, id: pid });
+}

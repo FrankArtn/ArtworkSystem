@@ -7,6 +7,7 @@ import Link from 'next/link';
 export default function ProductsPage() {
   const [rows, setRows] = useState([]);
   const [err, setErr] = useState('');
+  const [deletingId, setDeletingId] = useState(null); // NEW
 
   const num   = (x) => { const n = Number(x); return Number.isFinite(n) ? n : 0; };
   const money = (n) => num(n).toFixed(2);
@@ -23,6 +24,25 @@ export default function ProductsPage() {
     }
   }
   useEffect(() => { load(); }, []);
+
+  // NEW: delete a product
+  async function handleDelete(id) {
+    if (!id) return;
+    if (!confirm('Delete this product? This cannot be undone.')) return;
+
+    setErr('');
+    setDeletingId(id);
+    try {
+      const r = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || 'Failed to delete product');
+      await load(); // refresh list
+    } catch (e) {
+      setErr(e.message || 'Failed to delete product');
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <div className="max-w-5xl">
@@ -44,6 +64,7 @@ export default function ProductsPage() {
             <th>Unit</th>
             <th>Base setup</th>
             <th>Cost price</th>
+            <th className="w-1">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -60,10 +81,19 @@ export default function ProductsPage() {
               <td>{p.sku || '—'}</td>
               <td>{p.unit || '—'}</td>
               <td>
-                {p.base_setup_cost != null ? `$${money(p.base_setup_cost)}` : '—'}
+                {p.base_setup_cost != null ? `$${money(p.base_setup_cost)}` : '—'} {/* Cost shown in products database */}
               </td>
               <td>
                 {p.cost_price != null ? `$${money(p.cost_price)}` : '—'}
+              </td>
+              <td>
+                <button
+                  onClick={() => handleDelete(p.id)}
+                  disabled={deletingId === p.id}
+                  className="rounded border px-2 py-1 disabled:opacity-60"
+                >
+                  {deletingId === p.id ? 'Deleting…' : 'Delete'}
+                </button>
               </td>
             </tr>
           ))}

@@ -7,10 +7,12 @@ import { useRouter } from 'next/navigation';
 export default function NewProductPage() {
   const router = useRouter();
   const [name, setName] = useState('');
+  const [sku, setSku] = useState('');      // NEW
+  const [unit, setUnit] = useState('');    // NEW
   const [baseCost, setBaseCost] = useState('0');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [created, setCreated] = useState(null); // {id, name, base_setup_cost}
+  const [created, setCreated] = useState(null); // {id, name, base_setup_cost, sku, unit}
 
   const moneyStrToNum = (s) => {
     const n = Number(s);
@@ -29,6 +31,8 @@ export default function NewProductPage() {
         body: JSON.stringify({
           name: name.trim(),
           base_setup_cost: moneyStrToNum(baseCost),
+          sku: sku.trim() || null,     // NEW
+          unit: unit.trim() || null,   // NEW
         }),
       });
       const data = await r.json();
@@ -37,6 +41,8 @@ export default function NewProductPage() {
       setCreated(data || null);
       // reset inputs for quick entry
       setName('');
+      setSku('');      // NEW
+      setUnit('');     // NEW
       setBaseCost('0');
     } catch (e) {
       setErr(e.message || 'Failed to create product');
@@ -59,6 +65,28 @@ export default function NewProductPage() {
             value={name}
             onChange={e => setName(e.target.value)}
             required
+          />
+        </label>
+
+        {/* NEW: SKU */}
+        <label className="block">
+          <span className="block text-sm mb-1">SKU</span>
+          <input
+            className="w-64 rounded border px-3 py-2 bg-black text-white placeholder:text-neutral-400"
+            placeholder="e.g. SIGN-ALUM-24x36"
+            value={sku}
+            onChange={e => setSku(e.target.value)}
+          />
+        </label>
+
+        {/* NEW: Unit */}
+        <label className="block">
+          <span className="block text-sm mb-1">Unit</span>
+          <input
+            className="w-48 rounded border px-3 py-2 bg-black text-white placeholder:text-neutral-400"
+            placeholder="e.g. each, ft, sheet"
+            value={unit}
+            onChange={e => setUnit(e.target.value)}
           />
         </label>
 
@@ -97,6 +125,8 @@ export default function NewProductPage() {
           <div className="mb-2 text-green-500">Product created.</div>
           <div>ID: {created.id}</div>
           <div>Name: {created.name}</div>
+          <div>SKU: {created.sku}</div>         {/* NEW */}
+          <div>Unit: {created.unit}</div>       {/* NEW */}
           <div>Base setup cost: {Number(created.base_setup_cost ?? 0).toFixed(2)}</div>
         </div>
       )}
