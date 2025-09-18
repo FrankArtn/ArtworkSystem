@@ -46,6 +46,8 @@ Hosting: Render Web Service (Singapore).
 
 Database: Turso (libSQL) via @libsql/client (env: TURSO_DATABASE_URL, TURSO_AUTH_TOKEN).
 
+Image bucket: Google Cloud Service
+
 Render build commands:
 
 Build: npm ci && npm run build
@@ -67,8 +69,14 @@ Health path: /api/health.
 │   │   │   ├── add
 │   │   │   └── transfer
 │   │   ├── orders
-│   │   │   └── jobs
-│   │   ├── products
+│   │   │   ├── [id] #Individual job orders
+│   │   |   |    ├── images #read, uploads image to GCS and inserts record into DB
+│   │   |   |    |   |──[imageId] #delete image function
+│   │   |   |    |   └──sign-upload #creates url for image
+│   │   |   |    └── materials #get materials for job number
+│   │   │   └── jobs #displays list of jobs
+│   │   ├── products #list and create
+│   │   │   └── [id] #delete products
 │   │   └── quotes         #Quotes list level
 │   │       └── [id]       #Quotes review level
 │   │            ├── accept  # Client approved and accept create one job_number for whole quote
@@ -84,30 +92,20 @@ Health path: /api/health.
 │   ├── components
 │   │    └── statusBadgeCls.js #Controls the highlights of statuses
 │   ├── materials
-│   ├── orders
+│   ├── orders #job orders
 │   └── quotes
 │        ├── [id] # Review of individual quotes page
 │        └── new  # New quotes page
 ├── eslint.config.mjs
 ├── jsconfig.json
 ├── lib
-│   ├── db.js
+│   ├── db.js #specify DB for getDb()
+│   ├─- gcs.js #google cloud service upload, read, delete functions
 │   └── providers
 │       ├── postgres.js
 │       ├── sqlite.js
 │       └── turso.js
-├── migrations
-│   ├── 0001_init.sql
-│   ├── 0002_add_wip_and_totals.sql
-│   ├── 0003_add_wip_qty.sql
-│   ├── 0004_add_stock_qty.sql
-│   ├── 0005_add_timestamps.sql
-│   ├── 0006_unallocated_and_view.sql
-│   ├── 0008_normalize_material_ids.js
-│   ├── 0009_job_numbers_and_wip_allocations.js
-│   ├── 0010_quotes_numbers_and_accept_flow.js
-│   ├── 0012_quote_items_and_approval.js
-│   └── 0013_quote_items_canonical.js
+├── migrations #update to schema
 ├── next.config.mjs
 ├── package-lock.json
 ├── package.json
@@ -193,4 +191,51 @@ Just need to change 'DB_PROVIDER= [new provider]' in the .env.local file
 providers script is also ready in lib/providers
 employed one db access point in db.js in lib/ from the get go so that all db  queries use the getdb() method.
 In the future if db is changed will only need to change the hardcoded provider in getdb()
+
+##Google Cloud services used to store images
+each upload goes straight into your Google Cloud Storage (GCS) bucket (e.g. gs://my-job-pics) and not onto your app server’s disk.
+
+Here’s the exact flow your code implements:
+
+Get a signed upload URL (server)
+
+Your page calls POST /api/orders/[id]/images/sign-upload.
+
+The route uses getSignedUploadUrl(objectName, contentType) to create a V4 signed URL for your bucket (e.g. jobs/<jobId>/<uuid>-<safe-filename>).
+
+Browser → GCS (direct PUT)
+
+The browser uses that signed URL to PUT the file directly to GCS (no file passes through your server).
+
+Record metadata (server)
+
+After the upload, your page calls POST /api/orders/[id]/images to save:
+
+object_name (the GCS path like jobs/123/…png)
+
+optional filename, content_type
+
+This is stored in your job_images table.
+
+Viewing
+
+When you view a job, GET /api/orders/[id]/images reads rows from job_images and calls getSignedReadUrl(object_name) to return temporary signed URLs for the <img src="...">.
+
+What that means:
+
+Files live in GCS under your bucket (e.g. gs://my-job-pics/jobs/<jobId>/...).
+
+Your bucket is not public (Uniform access, no public access). Images are only reachable via time-limited signed URLs your API returns.
+
+CORS is already set so the browser can PUT from http://localhost:3000 and your production domain.
+
+Quick ways to verify:
+
+Cloud Console: Storage → Browser → my-job-pics → you should see jobs/<jobId>/... objects after an upload.
+
+CLI:
+gcloud storage ls gs://my-job-pics/jobs/<jobId>/
+
+
+
 

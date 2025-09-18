@@ -79,15 +79,19 @@ export default function NewProductPage() {
           />
         </label>
 
-        {/* NEW: Unit */}
+        {/* CHANGED: Unit dropdown */}
         <label className="block">
           <span className="block text-sm mb-1">Unit</span>
-          <input
-            className="w-48 rounded border px-3 py-2 bg-black text-white placeholder:text-neutral-400"
-            placeholder="e.g. each, ft, sheet"
+          <select
+            className="w-48 rounded border px-3 py-2 bg-black text-white"
             value={unit}
             onChange={e => setUnit(e.target.value)}
-          />
+          >
+            <option value="">Select unit</option>
+            <option value="sqm">sqm</option>
+            <option value="m">m</option>
+            <option value="each">each</option>
+          </select>
         </label>
 
         <label className="block">
@@ -125,8 +129,8 @@ export default function NewProductPage() {
           <div className="mb-2 text-green-500">Product created.</div>
           <div>ID: {created.id}</div>
           <div>Name: {created.name}</div>
-          <div>SKU: {created.sku}</div>         {/* NEW */}
-          <div>Unit: {created.unit}</div>       {/* NEW */}
+          <div>SKU: {created.sku}</div>
+          <div>Unit: {created.unit}</div>
           <div>Base setup cost: {Number(created.base_setup_cost ?? 0).toFixed(2)}</div>
         </div>
       )}

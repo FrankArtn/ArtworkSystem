@@ -6,10 +6,15 @@ const jerr = (msg, code = 400) => NextResponse.json({ error: msg }, { status: co
 
 // Recalculate and persist quote totals from canonical columns
 async function recalcQuoteTotals(qid) {
+  // billable_units = qty * (area_sqm OR length_m OR 1)
   const sums = await query(
     `SELECT
-       COALESCE(SUM(COALESCE(cost_price,0) * COALESCE(qty,0)),0) AS subtotal_cost,
-       COALESCE(SUM(COALESCE(sale_price,0) * COALESCE(qty,0)),0) AS total_price
+       SUM(COALESCE(cost_price,0) * COALESCE(qty,1) *
+           COALESCE(NULLIF(area_sqm,0), COALESCE(NULLIF(length_m,0), 1))
+       ) AS subtotal_cost,
+       SUM(COALESCE(sale_price,0) * COALESCE(qty,1) *
+           COALESCE(NULLIF(area_sqm,0), COALESCE(NULLIF(length_m,0), 1))
+       ) AS total_price
      FROM quote_items
      WHERE quote_id = ?`,
     [qid]
@@ -22,7 +27,7 @@ async function recalcQuoteTotals(qid) {
     `UPDATE quotes
        SET subtotal_cost = ?, total_price = ?, markup_pct = ?, updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
-    [sc, tp, mp, qid]
+    [sc || 0, tp || 0, mp, qid]
   );
 }
 
@@ -48,6 +53,9 @@ export async function GET(_req, { params }) {
         qi.qty,
         COALESCE(qi.sale_price,0) AS sale_price,
         COALESCE(qi.cost_price,0) AS cost_price,
+        qi.length_m,                 -- NEW
+        qi.width_m,                  -- NEW
+        qi.area_sqm,                 -- NEW
         p.name AS product_name,
         ${hasSku ? "p.sku" : "NULL AS sku"},
         o.id AS order_id,
@@ -79,6 +87,9 @@ export async function GET(_req, { params }) {
         qi.qty,
         COALESCE(qi.sale_price,0) AS sale_price,
         COALESCE(qi.cost_price,0) AS cost_price,
+        qi.length_m,                 -- NEW
+        qi.width_m,                  -- NEW
+        qi.area_sqm,                 -- NEW
         p.name AS product_name,
         ${hasSku ? "p.sku" : "NULL AS sku"},
         NULL AS order_id,
@@ -95,7 +106,6 @@ export async function GET(_req, { params }) {
   }
 }
 
-
 export async function POST(req, { params }) {
   const { id } = await params; // Next 15: await params
   const qid = Number(id);
@@ -106,6 +116,11 @@ export async function POST(req, { params }) {
   const qty = Number(body.qty);
   const overrideSale = body.sale_price != null ? Number(body.sale_price) : null;
   const markupPct = body.markup_pct != null ? Number(body.markup_pct) : null;
+
+  // NEW: optional dimensional fields from client
+  const length_m = body.length_m != null ? Number(body.length_m) : null;
+  const width_m  = body.width_m  != null ? Number(body.width_m)  : null;
+  const area_sqm = body.area_sqm != null ? Number(body.area_sqm) : null;
 
   if (!Number.isFinite(productId) || productId <= 0) return jerr("product_id required");
   if (!Number.isFinite(qty) || qty <= 0) return jerr("qty must be > 0");
@@ -150,6 +165,11 @@ export async function POST(req, { params }) {
   const cols = ["quote_id", "product_id", "qty", "cost_price", "sale_price"];
   const ph   = ["?", "?", "?", "?", "?"];
   const vals = [qid, productId, qty, cost_price, sale_price];
+
+  // NEW: include dimensional columns if present in schema
+  if (qiCols.has("length_m")) { cols.push("length_m"); ph.push("?"); vals.push(Number.isFinite(length_m) ? length_m : null); }
+  if (qiCols.has("width_m"))  { cols.push("width_m");  ph.push("?"); vals.push(Number.isFinite(width_m)  ? width_m  : null); }
+  if (qiCols.has("area_sqm")) { cols.push("area_sqm"); ph.push("?"); vals.push(Number.isFinite(area_sqm) ? area_sqm : null); }
 
   if (qiCols.has("created_at")) { cols.push("created_at"); ph.push("CURRENT_TIMESTAMP"); }
   if (qiCols.has("updated_at")) { cols.push("updated_at"); ph.push("CURRENT_TIMESTAMP"); }

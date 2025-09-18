@@ -17,6 +17,7 @@
     "db:patch:materials": "node scripts/patch-add-columns.js"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.17.1",
     "@libsql/client": "^0.15.14",
     "dotenv": "^17.2.2",
     "next": "15.5.2",

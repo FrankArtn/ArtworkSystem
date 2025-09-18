@@ -1,10 +1,10 @@
 // app/quotes/[id]/page.js
+// app/quotes/[id]/page.js
 'use client';
 import { useEffect, useMemo, useState, use as usePromise } from 'react';
 import { useRouter } from 'next/navigation';
 import { statusBadgeCls } from '@/app/components/statusBadgeCls';
 import Link from 'next/link';
-
 
 export default function QuoteDetailPage({ params }) {
   const router = useRouter();
@@ -14,19 +14,18 @@ export default function QuoteDetailPage({ params }) {
   const [deleting, setDeleting] = useState(false);
   const { id: rawId } = usePromise(params);
   const id = useMemo(() => Number(rawId), [rawId]);
+  const isWaitingForClient = String(quote?.status || '').toLowerCase() === 'waiting_for_client_approval';
   const isApproved = String(quote?.status || '').toLowerCase() === 'approved';
-  // consider these as "complete"
   const isComplete = useMemo(() => {
     const s = String(quote?.status || '').toLowerCase();
     return s === 'complete' || s === 'completed' || s === 'won' || s === 'closed';
   }, [quote?.status]);
 
-
   // ✅ NEW: local state to show success panel after deletion
   const [deleted, setDeleted] = useState(false);
   const [delMsg, setDelMsg] = useState('');
 
-    // ✅ NEW: approval success state
+  // ✅ NEW: approval success state
   const [approved, setApproved] = useState(false);
   const [approvedMsg, setApprovedMsg] = useState('');
 
@@ -34,17 +33,18 @@ export default function QuoteDetailPage({ params }) {
   const [showPdfBtn, setShowPdfBtn] = useState(false);
 
   // to show job_numbers after approve
-  const [createdJobs, setCreatedJobs] = useState([]); 
+  const [createdJobs, setCreatedJobs] = useState([]);
 
   //Compute whether to show jobs column
   const showJobsCol = useMemo(() => {
-  const st = String(quote?.status || '').toLowerCase();
-  const finished = ['approved', 'accepted', 'won', 'complete', 'completed'].includes(st);
-  return finished || items.some(it => it.job_number);
-}, [quote?.status, items]);
+    const st = String(quote?.status || '').toLowerCase();
+    const finished = ['approved', 'accepted', 'won', 'complete', 'completed'].includes(st);
+    return finished || items.some(it => it.job_number);
+  }, [quote?.status, items]);
 
+  // NEW: transportation cost (quote-level)
+  const [transportationCost, setTransportationCost] = useState('0');
 
-  // black style that blends into background (no white borders)
   const blackBare =
     "rounded px-2 py-1 bg-black text-white placeholder:text-neutral-300 focus:outline-none";
 
@@ -54,13 +54,11 @@ export default function QuoteDetailPage({ params }) {
   // local, temporary markup edits keyed by item id (string values for smooth typing)
   const [markupEdits, setMarkupEdits] = useState({}); // { [itemId]: "12.5" }
 
-  // Make job "open" red; otherwise reuse your existing badge styles
   const jobBadgeCls = (s) => {
     const t = String(s || '').toLowerCase();
     if (t === 'open') return 'bg-red-500/20 text-red-300 border-red-500/40';
     return statusBadgeCls(t);
   };
-
 
   function pctFromCostSale(cost, sale) {
     const c = toNumber(cost), s = toNumber(sale);
@@ -73,33 +71,32 @@ export default function QuoteDetailPage({ params }) {
   }
 
   async function load() {
-    if (!Number.isFinite(id) || deleted || approved) return; // ✅ stop fetching after delete
+    if (!Number.isFinite(id) || deleted || approved) return;
     setErr('');
     try {
       const q = await fetch(`/api/quotes/${id}`, { cache: 'no-store' });
       const qd = await q.json();
       if (!q.ok) throw new Error(qd?.error || 'Failed to load quote');
 
-      // ✅ If this quote is in "redo", jump straight to the editor
       if (qd?.status === 'redo') {
         router.push(`/quotes/new?quote=${id}`);
-        return; // stop: don't render the review view
+        return;
       }
 
       setQuote(qd);
+      // NEW: preload transportation cost
+      setTransportationCost(String(toNumber(qd?.transportation_cost ?? 0)));
 
       const r = await fetch(`/api/quotes/${id}/items`, { cache: 'no-store' });
       const data = await r.json();
       const rows = Array.isArray(data) ? data : [];
       setItems(rows);
-
-      // reset any local edits on reload
       setMarkupEdits({});
     } catch (e) {
       setErr(e.message || 'Failed to load');
     }
   }
-  useEffect(() => { load(); }, [id, deleted, approved]); // ✅ watch `deleted`
+  useEffect(() => { load(); }, [id, deleted, approved]);
 
   async function updateItem(itemId, patch) {
     setErr('');
@@ -109,6 +106,24 @@ export default function QuoteDetailPage({ params }) {
       body: JSON.stringify(patch),
     });
     await load();
+  }
+
+  // NEW: persist transportation cost
+  async function saveTransportationCost(v) {
+    const amount = round2(toNumber(v));
+    try {
+      const r = await fetch(`/api/quotes/${id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ transportation_cost: amount }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || 'Failed to save transportation cost');
+      setQuote(prev => prev ? { ...prev, transportation_cost: amount } : prev);
+      setTransportationCost(String(amount));
+    } catch (e) {
+      setErr(e.message || 'Failed to save transportation cost');
+    }
   }
 
   async function setStatus(status) {
@@ -121,7 +136,6 @@ export default function QuoteDetailPage({ params }) {
     const data = await r.json().catch(() => ({}));
     if (!r.ok) { setErr(data?.error || 'Failed to update status'); return; }
 
-    // ✅ show approval success panel for your approve action
     if (status === 'waiting_for_client_approval' || status === 'accepted' || status === 'won') {
       const msg =
         status === 'waiting_for_client_approval'
@@ -129,16 +143,14 @@ export default function QuoteDetailPage({ params }) {
           : 'Quote approved';
       setApproved(true);
       setApprovedMsg(msg);
-      setShowPdfBtn(true); 
-      return; // load() is skipped due to approved flag; keeps UX consistent with delete
+      setShowPdfBtn(true);
+      return;
     }
 
-    // ✅ NEW: Redo → show the same panel but hide PDF button
     if (status === 'redo') {
       setApproved(true);
-      setApprovedMsg('Sent back to redo');  // message for redo
-      setShowPdfBtn(false);                 // 👈 hide PDF button on redo
-      // router.push(`/quotes/new?quote=${id}`); //Push quote to new quotes page
+      setApprovedMsg('Sent back to redo');
+      setShowPdfBtn(false);
       return;
     }
 
@@ -152,7 +164,6 @@ export default function QuoteDetailPage({ params }) {
       const r = await fetch(`/api/quotes/${id}`, { method: 'DELETE' });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || 'Failed to delete quote');
-      // ✅ show success panel instead of navigating away
       setDeleted(true);
       setDelMsg('Successfully deleted');
       setQuote(null);
@@ -164,7 +175,7 @@ export default function QuoteDetailPage({ params }) {
     }
   }
 
-    async function handleAccepted() {
+  async function handleAccepted() {
     setErr('');
     const r = await fetch(`/api/quotes/${id}/approve`, { method: 'POST' });
     const data = await r.json().catch(() => ({}));
@@ -192,9 +203,33 @@ export default function QuoteDetailPage({ params }) {
     setCreatedJobs([]);
   }
 
-  const total = useMemo(
-    () => items.reduce((s, it) => s + toNumber(it.sale_price) * toNumber(it.qty || 1), 0),
+  // ✅ NEW: helper — billable units (area if L×W>0 or area_sqm>0; else length_m; else 1)
+  const billableUnits = (it) => {
+    const L = toNumber(it.length_m);
+    const W = toNumber(it.width_m);
+    const area = toNumber(it.area_sqm);
+    const computedArea = L > 0 && W > 0 ? round2(L * W) : 0;
+    if ((area || 0) > 0) return round2(area);
+    if (computedArea > 0) return computedArea;
+    if (toNumber(it.length_m) > 0) return round2(toNumber(it.length_m));
+    return 1;
+  };
+
+  // Subtotal = items only (qty × billable units × sale_price)
+  const subtotal = useMemo(
+    () => items.reduce((s, it) => {
+      const sale = toNumber(it.sale_price);
+      const qty  = Math.max(1, toNumber(it.qty || 1));
+      const units = billableUnits(it);
+      return s + sale * qty * (units || 1);
+    }, 0),
     [items]
+  );
+
+  // NEW: grand total includes transportation cost
+  const grandTotal = useMemo(
+    () => round2(subtotal + toNumber(transportationCost)),
+    [subtotal, transportationCost]
   );
 
   // ✅ Minimal success panel; keeps your formatting conventions
@@ -222,7 +257,6 @@ export default function QuoteDetailPage({ params }) {
         <h2 className="text-2xl font-semibold mb-3">Quote Review</h2>
         <p className="text-green-700 mb-4">{approvedMsg || 'Successfully approved'}</p>
 
-        {/* ✅ Show created job numbers (from /approve response) */}
         {createdJobs.length > 0 && (
           <ul className="list-disc ml-5 text-sm">
             {createdJobs.map(j => (
@@ -233,21 +267,21 @@ export default function QuoteDetailPage({ params }) {
 
         <div className="mt-5 flex flex-wrap gap-2">
           {showPdfBtn && (
-          <a
-            href={`/api/quotes/${id}/pdf`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded border px-4 py-2"
-          >
-            Print PDF
-          </a>
+            <a
+              href={`/api/quotes/${id}/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded border px-4 py-2"
+            >
+              Print PDF
+            </a>
           )}
           <button className="rounded border px-4 py-2" onClick={() => router.push('/quotes')}>
             Back to list
           </button>
           <button
             className="rounded border px-4 py-2"
-            onClick={() => { setApproved(false); load(); }} // continue editing
+            onClick={() => { setApproved(false); load(); }}
           >
             Continue editing
           </button>
@@ -256,13 +290,12 @@ export default function QuoteDetailPage({ params }) {
     );
   }
 
-
   return (
     <div className="max-w-6xl">
       <h2 className="text-2xl font-semibold mb-3">Quote Review</h2>
       {err && <p className="text-red-600 mb-2">{err}</p>}
 
-      {/* ✅ NEW: Customer at the top */}
+      {/* Customer */}
       {quote && (
         <div className="mb-1 text-base">
           <span className="font-medium">Customer:</span>{' '}
@@ -277,9 +310,6 @@ export default function QuoteDetailPage({ params }) {
           <span className={`inline-block px-2 py-0.5 rounded border ${statusBadgeCls(quote.status)}`}>
             {quote.status || 'draft'}
           </span>
-          {/* (Optional) inline customer display instead of the separate line above:
-              &nbsp;·&nbsp; Customer: <span className="font-medium">{quote.customer || '—'}</span>
-          */}
         </div>
       )}
 
@@ -287,21 +317,32 @@ export default function QuoteDetailPage({ params }) {
         <thead>
           <tr className="[&>th]:text-left [&>th]:py-2 [&>th]:border-b">
             <th>Product</th>
+            {/* ✅ NEW next to product */}
+            <th>Length (m)</th>
+            <th>Width (m)</th>
+            <th>Total sqm</th>
             <th>SKU</th>
             <th>Job # / Status</th>
-            <th>Cost</th>
+            <th>Cost/Unit</th>
             <th>Markup %</th>
-            <th>Sale price</th>
+            <th>Sale price/Unit</th>
             <th>QTY</th>
             <th>Line total</th>
           </tr>
         </thead>
         <tbody>
           {items.length === 0 ? (
-            <tr><td colSpan={7} className="py-4 text-neutral-500">No items.</td></tr>
+            <tr>
+              {/* 11 columns when job col present; 10 when not — use showJobsCol */}
+              <td colSpan={showJobsCol ? 11 : 10} className="py-4 text-neutral-500">No items.</td>
+            </tr>
           ) : items.map(it => {
               const cost = toNumber(it.cost_price);
-              const qty  = toNumber(it.qty || 1);
+              const qty  = Math.max(1, toNumber(it.qty || 1));
+              const L = toNumber(it.length_m);
+              const W = toNumber(it.width_m);
+              const explicitArea = toNumber(it.area_sqm);
+              const area = explicitArea > 0 ? explicitArea : (L > 0 && W > 0 ? round2(L * W) : 0);
 
               // current/derived markup
               const currentPct = pctFromCostSale(cost, it.sale_price);
@@ -310,12 +351,13 @@ export default function QuoteDetailPage({ params }) {
                 ? Number(editPctStr)
                 : currentPct;
 
-              // show “preview” sale if user has typed a new pct; otherwise, stored sale_price
               const previewSale = Number.isFinite(Number(editPctStr))
-                ? saleFromCostPct(cost, editPctStr)
+                ? saleFromCostPct(cost, effectivePct)
                 : round2(toNumber(it.sale_price));
 
-              const line = round2(previewSale * qty);
+              // ✅ CHANGED: line total multiplies by billable units (area or length or 1)
+              const units = area > 0 ? area : (L > 0 ? L : 1);
+              const line = round2(previewSale * qty * (units || 1));
 
               return (
                 <tr key={it.id} className="[&>td]:py-2 [&>td]:border-b">
@@ -326,6 +368,27 @@ export default function QuoteDetailPage({ params }) {
                     </div>
                   </td>
 
+                  {/* ✅ NEW: Length */}
+                  <td>
+                    <div className={`${blackBare} border border-transparent w-24 text-right`}>
+                      {L > 0 ? L : '—'}
+                    </div>
+                  </td>
+
+                  {/* ✅ NEW: Width */}
+                  <td>
+                    <div className={`${blackBare} border border-transparent w-24 text-right`}>
+                      {W > 0 ? W : '—'}
+                    </div>
+                  </td>
+
+                  {/* ✅ NEW: Total sqm (L×W) */}
+                  <td>
+                    <div className={`${blackBare} border border-transparent w-28 text-right`}>
+                      {area > 0 ? `${area} sqm` : '—'}
+                    </div>
+                  </td>
+
                   {/* SKU */}
                   <td>
                     <div className={`${blackBare} border border-transparent w-28 text-center`}>
@@ -333,24 +396,24 @@ export default function QuoteDetailPage({ params }) {
                     </div>
                   </td>
 
-                   {/* NEW: Job # (only when showJobsCol) */}
+                  {/* Job # / Status */}
                   {showJobsCol && (
                     <td>
-                    {it.order_id ? (
-                      <>
-                        <Link className="text-blue-400 hover:underline" href={`/orders/${it.order_id}`}>
-                          {it.job_number || `JOB-${String(it.order_id).padStart(6,'0')}`}
-                        </Link>
-                        {it.job_status && (
-                          <span className={`ml-2 inline-block px-2 py-0.5 rounded border ${statusBadgeCls(it.job_status)}`}>
-                            {it.job_status}
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <span className="text-neutral-500">—</span>
-                    )}
-                  </td>
+                      {it.order_id ? (
+                        <>
+                          <Link className="text-blue-400 hover:underline" href={`/orders/${it.order_id}`}>
+                            {it.job_number || `JOB-${String(it.order_id).padStart(6,'0')}`}
+                          </Link>
+                          {it.job_status && (
+                            <span className={`ml-2 inline-block px-2 py-0.5 rounded border ${statusBadgeCls(it.job_status)}`}>
+                              {it.job_status}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-neutral-500">—</span>
+                      )}
+                    </td>
                   )}
 
                   {/* Cost (read-only) */}
@@ -360,10 +423,9 @@ export default function QuoteDetailPage({ params }) {
                     </div>
                   </td>
 
-                  {/* Markup % (editable) unless approved */}
+                  {/* Markup % (editable unless waitingForClient/approved/complete) */}
                   <td>
-                    {isApproved || isComplete ? (
-                      // read-only pill when approved
+                    {isApproved || isComplete || isWaitingForClient ? (
                       <div className={`${blackBare} border border-transparent w-24 text-right`}>
                         {Number.isFinite(currentPct) ? currentPct.toFixed(1) : '0.0'}%
                       </div>
@@ -385,7 +447,6 @@ export default function QuoteDetailPage({ params }) {
                       />
                     )}
                   </td>
-
 
                   {/* Sale price (read-only, shows computed/preview) */}
                   <td>
@@ -413,16 +474,40 @@ export default function QuoteDetailPage({ params }) {
         </tbody>
         <tfoot>
           <tr>
-            <td colSpan={showJobsCol ? 7 : 6} className="text-right font-medium py-2">Total</td>
-            <td className="font-semibold">${round2(total).toFixed(2)}</td>
+            {/* +3 columns for Length/Width/Total sqm */}
+            <td colSpan={showJobsCol ? 10 : 9} className="text-right font-medium py-2">Subtotal</td>
+            <td className="font-semibold">${round2(subtotal).toFixed(2)}</td>
           </tr>
         </tfoot>
       </table>
 
+      {/* NEW: Transportation cost + Grand total block */}
+      <div className="mt-3 max-w-md ml-auto space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <label className="text-sm">Transportation cost</label>
+          {isApproved || isComplete || isWaitingForClient ? (
+            <div className="w-40 text-right">${round2(toNumber(transportationCost)).toFixed(2)}</div>
+          ) : (
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              className="border rounded px-2 py-1 w-40 text-right"
+              value={transportationCost}
+              onChange={(e) => setTransportationCost(e.target.value)}
+              onBlur={(e) => saveTransportationCost(e.target.value)}
+            />
+          )}
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t pt-2">
+          <div className="text-right font-medium">Total</div>
+          <div className="font-semibold">${grandTotal.toFixed(2)}</div>
+        </div>
+      </div>
+
       <div className="mt-5 flex flex-wrap gap-2">
         {isComplete ? (
           <>
-            {/* Only show Print + Back when complete */}
             <a
               href={`/api/quotes/${id}/pdf`}
               target="_blank"
@@ -437,7 +522,6 @@ export default function QuoteDetailPage({ params }) {
           </>
         ) : (
           <>
-            {/* a) Save & Approve is hidden if status is already "approved" */}
             {!isApproved && (
               <button
                 className="rounded border px-4 py-2"
@@ -447,7 +531,6 @@ export default function QuoteDetailPage({ params }) {
               </button>
             )}
 
-            {/* b) Send back to redo — also hidden when approved */}
             {!isApproved && (
               <button
                 className="rounded border px-4 py-2"
@@ -457,7 +540,6 @@ export default function QuoteDetailPage({ params }) {
               </button>
             )}
 
-            {/* c) Print PDF (always visible in this branch) */}
             <a
               href={`/api/quotes/${id}/pdf`}
               target="_blank"
@@ -467,7 +549,6 @@ export default function QuoteDetailPage({ params }) {
               Print PDF
             </a>
 
-            {/* Delete quote */}
             <button
               onClick={deleteQuote}
               disabled={deleting}
@@ -483,17 +564,17 @@ export default function QuoteDetailPage({ params }) {
         )}
       </div>
 
-        {/* ✅ SHOW THESE ONLY WHEN WAITING FOR CLIENT */}
-        {quote?.status === 'waiting_for_client_approval' && (
-          <div className="mt-3 flex gap-2">
-            <button className="rounded border px-4 py-2" onClick={handleAccepted}>
-              Accepted
-            </button>
-            <button className="rounded border px-4 py-2" onClick={handleDenied}>
-              Denied
-            </button>
-          </div>
-        )}
+      {/* SHOW THESE ONLY WHEN WAITING FOR CLIENT */}
+      {quote?.status === 'waiting_for_client_approval' && (
+        <div className="mt-3 flex gap-2">
+          <button className="rounded border px-4 py-2" onClick={handleAccepted}>
+            Accepted
+          </button>
+          <button className="rounded border px-4 py-2" onClick={handleDenied}>
+            Denied
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation';
 import { statusBadgeCls } from '@/app/components/statusBadgeCls';
 import MaterialSelect from '@/app/components/MaterialSelect';
 
-
 export default function OrderDetailPage({ params }) {
   const router = useRouter();
   const { id: rawId } = usePromise(params);
@@ -22,6 +21,9 @@ export default function OrderDetailPage({ params }) {
   const [selMat, setSelMat] = useState('');
   const [matQty, setMatQty] = useState(1);
   const [matBusy, setMatBusy] = useState(false);
+
+  // NEW: job pictures state
+  const [images, setImages] = useState([]);
 
   // helpers for numbers / money
   const num   = (x) => { const n = Number(x); return Number.isFinite(n) ? n : 0; };
@@ -74,9 +76,38 @@ export default function OrderDetailPage({ params }) {
     }
   }
 
+  // NEW: load images for this job
+  async function loadImages() {
+    if (!Number.isFinite(id)) return;
+    try {
+      const r = await fetch(`/api/orders/${id}/images`, { cache: 'no-store' });
+      const data = await r.json();
+      setImages(Array.isArray(data) ? data : []);
+    } catch {
+      setImages([]);
+    }
+  }
+
+  // app/orders/[id]/page.js
+  async function handleDeleteImage(img) {
+    if (!Number.isFinite(id)) return;
+    const ok = window.confirm('Delete this image? This cannot be undone.');
+    if (!ok) return;
+
+    const r = await fetch(`/api/orders/${id}/images/${img.id}`, { method: 'DELETE' });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      alert(data?.error || 'Failed to delete image');
+      return;
+    }
+    setImages(prev => prev.filter(x => x.id !== img.id));
+  }
+
+
   useEffect(() => { loadOrder(); }, [id]);
   useEffect(() => { loadMaterialsList(); }, []);         // for the selector
   useEffect(() => { loadAllocations(); }, [id, order?.job_number]); // refresh when job changes
+  useEffect(() => { loadImages(); }, [id]); // NEW: images
 
   // total cost of materials for this job
   const totalAllocCost = useMemo(
@@ -154,6 +185,55 @@ export default function OrderDetailPage({ params }) {
     }
   }
 
+  // NEW: handle picture upload (browser -> signed PUT to GCS)
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    if (!file || !Number.isFinite(id)) return;
+
+    try {
+      // 1) get signed upload URL from server
+      const r1 = await fetch(`/api/orders/${id}/images/sign-upload`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type || 'application/octet-stream',
+        }),
+      });
+      const { uploadUrl, objectName, error } = await r1.json();
+      if (!r1.ok || error || !uploadUrl || !objectName) {
+        throw new Error(error || 'Failed to get signed upload URL');
+      }
+
+      // 2) PUT file directly to GCS
+      const r2 = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file,
+      });
+      if (!r2.ok) throw new Error('Upload failed');
+
+      // 3) Persist metadata in DB and get a signed read URL back
+      const r3 = await fetch(`/api/orders/${id}/images`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          objectName,
+          filename: file.name,
+          contentType: file.type || 'application/octet-stream',
+        }),
+      });
+      const saveRes = await r3.json();
+      if (!r3.ok || saveRes?.error) throw new Error(saveRes?.error || 'Failed to save image metadata');
+
+      // 4) reload gallery
+      await loadImages();
+      e.target.value = ''; // reset file input
+    } catch (ex) {
+      alert(ex.message || 'Upload failed');
+    }
+  }
+
   const humanQuoteNum = (o) =>
     o?.quote_number || (o?.quote_id ? `QUO-${String(o.quote_id).padStart(6, '0')}` : '—');
 
@@ -212,6 +292,54 @@ export default function OrderDetailPage({ params }) {
               {order.created_at && <>Created: {order.created_at} · </>}
               {order.updated_at && <>Updated: {order.updated_at}</>}
               {order.completed_at && <> · Completed: {order.completed_at}</>}
+            </div>
+          </div>
+
+          {/* ===== Job pictures ===== */}
+          <div className="inline-flex items-center gap-2">
+
+            <input
+              id="job-file"
+              type="file"
+              accept="image/png,image/jpeg"
+              onChange={handleFile}
+              className="hidden"
+            />
+
+            <label htmlFor="job-file" className="px-3 py-1 border rounded cursor-pointer">
+              Upload image
+            </label>
+
+            <div className="mt-3 grid grid-cols-2 md:grid-cols-3 gap-3">
+              {images.length === 0 ? (
+                <div className="text-neutral-500 col-span-2 md:col-span-3">No pictures uploaded.</div>
+              ) : images.map(img => (
+                <div key={img.id ?? img.object_name} className="border rounded p-2">
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <div className="text-xs truncate">
+                      {img.filename || img.object_name}
+                    </div>
+                    {/* NEW: Open image button (opens signed URL in a new tab) */}
+                    <a
+                      href={img.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs px-2 py-1 border rounded whitespace-nowrap"
+                      title="Open image in a new tab"
+                    >
+                      Open image
+                    </a>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteImage(img)}
+                        className="text-xs px-2 py-1 border rounded whitespace-nowrap"
+                        title="Delete image"
+                      >
+                        Delete
+                      </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -289,18 +417,16 @@ export default function OrderDetailPage({ params }) {
             {/* Add material to this job */}
             <div className="mt-4 flex flex-wrap items-end gap-2">
               <label className="grid gap-1">
-                <span className="text-sm">Material</span>
                 <MaterialSelect
-                items={mats}
-                value={selMat}
-                onChange={setSelMat}
-                label="Material"
-                placeholder="Search name or SKU…"
-                showStock
-                showUnit
-                className="w-95"
+                  items={mats}
+                  value={selMat}
+                  onChange={setSelMat}
+                  label="Material"
+                  placeholder="Search name or SKU…"
+                  showStock
+                  showUnit
+                  className="w-95"
                 />
-
               </label>
               <label className="grid gap-1">
                 <span className="text-sm">Qty</span>

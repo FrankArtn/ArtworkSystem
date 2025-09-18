@@ -25,7 +25,6 @@ export default function MaterialsPage() {
     sku: "",
     unit: "m2",
     costPerUnit: "",
-    reorderLevel: "",       // kept for UI only (not used by API yet)
     initialUnallocated: "", // sent to unallocated_stock at create time
   });
   const [creating, setCreating] = useState(false);
@@ -162,8 +161,7 @@ export default function MaterialsPage() {
       } else {
         setCreateMsg(`Created: ${payload.name}`);
         setForm({
-          name: "", sku: "", unit: "m2", costPerUnit: "",
-          reorderLevel: "", initialUnallocated: ""
+          name: "", sku: "", unit: "m2", costPerUnit: "", initialUnallocated: ""
         });
         await load();
       }
@@ -242,7 +240,7 @@ export default function MaterialsPage() {
             <input
               type="number"
               step="0.01"
-              className="border rounded px-2 py-1 w-28"
+              className="border rounded px-2 py-1 w-32"
               value={addCost}
               onChange={e => setAddCost(e.target.value)}
               placeholder="Unit cost (opt)"
@@ -251,7 +249,7 @@ export default function MaterialsPage() {
             <button
               onClick={addUnallocated}
               disabled={adding || !selAdd}
-              className="rounded bg-black text-white px-3 py-1 disabled:opacity-60"
+              className="border rounded bg-black text-white px-3 py-1 disabled:opacity-100"
             >
               {adding ? "Adding…" : "Add stock"}
             </button>
@@ -263,7 +261,9 @@ export default function MaterialsPage() {
         </div>
       </details>
 
+      
       {/* Collapsible: Transfer unallocated → WIP */}
+      {/*
       <details className="group mt-6 border rounded-xl">
         <summary className="flex items-center justify-between cursor-pointer list-none px-4 py-3 select-none">
           <span className="font-medium">Start job (move Unallocated → WIP)</span>
@@ -289,7 +289,7 @@ export default function MaterialsPage() {
               min="1"
             />
 
-            {/* Job dropdown */}
+            
             <select
               className="border rounded px-2 py-1"
               value={jobSel}
@@ -321,6 +321,7 @@ export default function MaterialsPage() {
           </div>
         </div>
       </details>
+      */}
 
       {/* Collapsible: Create new material */}
       <details className="group mt-4 border rounded-xl">
@@ -356,8 +357,8 @@ export default function MaterialsPage() {
                 value={form.unit}
                 onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}
               >
-                <option value="m2">m²</option>
-                <option value="lm">lm</option>
+                <option value="sqm">sqm</option>
+                <option value="m">m</option>
                 <option value="ea">each</option>
               </select>
             </label>
@@ -373,18 +374,7 @@ export default function MaterialsPage() {
               />
             </label>
             <label className="grid gap-1">
-              <span className="text-sm text-neutral-700">Reorder level</span>
-              <input
-                type="number"
-                step="0.01"
-                className="border rounded px-2 py-1"
-                value={form.reorderLevel}
-                onChange={e => setForm(f => ({ ...f, reorderLevel: e.target.value }))}
-                placeholder="0"
-              />
-            </label>
-            <label className="grid gap-1">
-              <span className="text-sm text-neutral-700">Initial unallocated</span>
+              <span className="text-sm text-neutral-700">Initial QTY unallocated</span>
               <input
                 type="number"
                 step="1"

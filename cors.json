@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["http://localhost:3000", "https://artworksystem.onrender.com"],
+    "method": ["GET", "PUT", "POST", "HEAD"],
+    "responseHeader": ["Content-Type", "x-goog-resumable", "Authorization"],
+    "maxAgeSeconds": 3600
+  }
+]

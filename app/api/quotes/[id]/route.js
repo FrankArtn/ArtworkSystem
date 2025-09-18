@@ -12,8 +12,16 @@ export async function GET(_req, context) {
   if (!Number.isFinite(qid)) return jerr("invalid quote id");
 
   const r = await query(
-    `SELECT id, quote_number, status, customer, created_at, updated_at
-       FROM quotes WHERE id = ? LIMIT 1`,
+    `SELECT
+       id,
+       quote_number,
+       status,
+       customer,
+       COALESCE(transportation_cost, 0) AS transportation_cost,  -- ✅ include for preload
+       created_at,
+       updated_at
+     FROM quotes
+     WHERE id = ? LIMIT 1`,
     [qid]
   );
   const row = r.rows?.[0];
@@ -59,6 +67,14 @@ export async function PATCH(req, context) {
     values.push(status);
   }
 
+  // NEW: transportation_cost (REAL, coerced to >= 0)
+  if (Object.prototype.hasOwnProperty.call(body, "transportation_cost")) {
+    let t = Number(body.transportation_cost);
+    if (!Number.isFinite(t) || t < 0) t = 0;
+    updates.push("transportation_cost = ?");
+    values.push(t);
+  }
+
   if (updates.length === 0) return jerr("no supported fields to update");
 
   const sql = `
@@ -71,37 +87,43 @@ export async function PATCH(req, context) {
   if (!r || r.rowsAffected === 0) return jerr("quote not found", 404);
 
   const out = await query(
-    `SELECT id, quote_number, status, customer, created_at, updated_at
-       FROM quotes WHERE id = ?`,
+    `SELECT
+       id,
+       quote_number,
+       status,
+       customer,
+       COALESCE(transportation_cost, 0) AS transportation_cost,  -- ✅ return it
+       created_at,
+       updated_at
+     FROM quotes
+     WHERE id = ?`,
     [qid]
   );
 
-  // ✅ NEW: if this order is tied to a quote, and ALL orders for that quote are complete/closed, mark the quote as "won"
-  if (row?.quote_id) {
-    try {
-      const agg = await query(
-        `SELECT
-           COUNT(1) AS total,
-           SUM(CASE WHEN LOWER(COALESCE(status,'')) IN ('complete','closed') THEN 1 ELSE 0 END) AS done
-         FROM orders
-         WHERE quote_id = ?`,
-        [row.quote_id]
-      );
-      const total = Number(agg.rows?.[0]?.total || 0);
-      const done  = Number(agg.rows?.[0]?.done || 0);
+  // ✅ Best-effort: if ALL jobs for this quote are complete/closed, mark the quote complete
+  try {
+    const agg = await query(
+      `SELECT
+         COUNT(1) AS total,
+         SUM(CASE WHEN LOWER(COALESCE(status,'')) IN ('complete','closed') THEN 1 ELSE 0 END) AS done
+       FROM orders
+       WHERE quote_id = ?`,
+      [qid]
+    );
+    const total = Number(agg.rows?.[0]?.total || 0);
+    const done  = Number(agg.rows?.[0]?.done || 0);
 
-      if (total > 0 && done === total) {
-        await query(
-          `UPDATE quotes
-              SET status='complete',
-                  updated_at=CURRENT_TIMESTAMP
-            WHERE id = ?`,
-          [row.quote_id]
-        );
-      }
-    } catch {
-      // best-effort; don't block the response if this aggregation fails
+    if (total > 0 && done === total) {
+      await query(
+        `UPDATE quotes
+           SET status='complete',
+               updated_at=CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [qid]
+      );
     }
+  } catch {
+    // best-effort; don't block the response if this aggregation fails
   }
 
   return NextResponse.json(out.rows?.[0] ?? null);
@@ -238,4 +260,3 @@ export async function DELETE(req, context) {
     { status: 200 }
   );
 }
-
