@@ -1,10 +1,11 @@
 // app/quotes/[id]/page.js
-// app/quotes/[id]/page.js
 'use client';
 import { useEffect, useMemo, useState, use as usePromise } from 'react';
 import { useRouter } from 'next/navigation';
 import { statusBadgeCls } from '@/app/components/statusBadgeCls';
 import Link from 'next/link';
+import { CURRENCY_SYMBOL, formatMoney } from '@/lib/currency';
+
 
 export default function QuoteDetailPage({ params }) {
   const router = useRouter();
@@ -451,7 +452,7 @@ export default function QuoteDetailPage({ params }) {
                   {/* Sale price (read-only, shows computed/preview) */}
                   <td>
                     <div className={`${blackBare} border border-transparent w-28 text-right`}>
-                      ${previewSale.toFixed(2)}
+                      {CURRENCY_SYMBOL}{previewSale.toFixed(2)}
                     </div>
                   </td>
 
@@ -465,7 +466,7 @@ export default function QuoteDetailPage({ params }) {
                   {/* Line total (read-only) */}
                   <td>
                     <div className={`${blackBare} border border-transparent w-28 text-right`}>
-                      ${line.toFixed(2)}
+                      {CURRENCY_SYMBOL}{line.toFixed(2)}
                     </div>
                   </td>
                 </tr>
@@ -475,8 +476,8 @@ export default function QuoteDetailPage({ params }) {
         <tfoot>
           <tr>
             {/* +3 columns for Length/Width/Total sqm */}
-            <td colSpan={showJobsCol ? 10 : 9} className="text-right font-medium py-2">Subtotal</td>
-            <td className="font-semibold">${round2(subtotal).toFixed(2)}</td>
+            <td colSpan={showJobsCol ? 10 : 9} className="text-right font-medium py-2 pr-2">Subtotal</td>
+            <td className="font-semibold">{CURRENCY_SYMBOL}{round2(subtotal).toFixed(2)}</td>
           </tr>
         </tfoot>
       </table>
@@ -486,7 +487,7 @@ export default function QuoteDetailPage({ params }) {
         <div className="flex items-center justify-between gap-3">
           <label className="text-sm">Transportation cost</label>
           {isApproved || isComplete || isWaitingForClient ? (
-            <div className="w-40 text-right">${round2(toNumber(transportationCost)).toFixed(2)}</div>
+            <div className="w-40 text-right">{CURRENCY_SYMBOL}{round2(toNumber(transportationCost)).toFixed(2)}</div>
           ) : (
             <input
               type="number"
@@ -501,7 +502,7 @@ export default function QuoteDetailPage({ params }) {
         </div>
         <div className="flex items-center justify-between gap-3 border-t pt-2">
           <div className="text-right font-medium">Total</div>
-          <div className="font-semibold">${grandTotal.toFixed(2)}</div>
+          <div className="font-semibold">{CURRENCY_SYMBOL}{grandTotal.toFixed(2)}</div>
         </div>
       </div>
 

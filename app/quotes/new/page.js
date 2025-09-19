@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { statusBadgeCls } from '@/app/components/statusBadgeCls';
+import { CURRENCY_SYMBOL, formatMoney } from '@/lib/currency';
 
 export default function NewQuotePage() {
   const router = useRouter();
@@ -393,9 +394,9 @@ export default function NewQuotePage() {
         </label>
 
         <div className="text-sm text-white/90">
-          Cost: <strong className="text-white">${selectedCost.toFixed(2)}</strong>
+          Cost: <strong className="text-white">{CURRENCY_SYMBOL}{selectedCost.toFixed(2)}</strong>
           &nbsp;→&nbsp; Sale @ {Number(markupPct || 0).toFixed(1)}%:&nbsp;
-          <strong className="text-white">${computedSale.toFixed(2)}</strong>
+          <strong className="text-white">{CURRENCY_SYMBOL}{computedSale.toFixed(2)}</strong>
         </div>
       </div>
 
@@ -412,7 +413,7 @@ export default function NewQuotePage() {
             {Array.isArray(products) && products.length > 0 ? (
               products.map(p => (
                 <option key={p.id} value={String(p.id)}>
-                  {p.name} {p.sku ? `(${p.sku})` : ''} — ${Number(p.cost_hint ?? 0).toFixed(2)} cost{p.unit ? ` / ${p.unit}` : ''}
+                  {p.name} {p.sku ? `(${p.sku})` : ''} — {CURRENCY_SYMBOL}{Number(p.cost_hint ?? 0).toFixed(2)} cost{p.unit ? ` / ${p.unit}` : ''}
                 </option>
               ))
             ) : (
@@ -463,7 +464,7 @@ export default function NewQuotePage() {
         )}
 
         <div className="text-sm text-neutral-700 mb-2">
-          Sale (per unit): <strong>${computedSale.toFixed(2)}</strong>
+          Sale (per unit): <strong>{CURRENCY_SYMBOL}{computedSale.toFixed(2)}</strong>
         </div>
 
         <button
@@ -577,7 +578,7 @@ export default function NewQuotePage() {
                 </td>
 
                 <td>{it.sku || '—'}</td>
-                <td>${cost.toFixed(2)}</td>
+                <td>{CURRENCY_SYMBOL}{cost.toFixed(2)}</td>
 
                 {/* Markup % (editable) */}
                 <td>
@@ -598,7 +599,7 @@ export default function NewQuotePage() {
                 </td>
 
                 {/* Sale price (read-only, shows preview) */}
-                <td>${previewSale.toFixed(2)}</td>
+                <td>{CURRENCY_SYMBOL}{previewSale.toFixed(2)}</td>
 
                 <td>
                   <input
@@ -609,7 +610,7 @@ export default function NewQuotePage() {
                   />
                 </td>
 
-                <td>${line.toFixed(2)}</td>
+                <td>{CURRENCY_SYMBOL}{line.toFixed(2)}</td>
 
                 <td>
                   <button onClick={() => removeItem(it.id)} className="px-2 py-1 border rounded">
@@ -623,8 +624,8 @@ export default function NewQuotePage() {
         {/* Table shows SUBTOTAL only (items) */}
         <tfoot>
           <tr>
-            <td colSpan={9} className="text-right font-medium py-2">Subtotal</td>
-            <td className="font-semibold">${subtotal.toFixed(2)}</td>
+            <td colSpan={9} className="text-right font-medium py-2 pr-2">Subtotal</td>
+            <td className="font-semibold">{CURRENCY_SYMBOL}{subtotal.toFixed(2)}</td>
             <td />
           </tr>
         </tfoot>
@@ -646,7 +647,7 @@ export default function NewQuotePage() {
         </div>
         <div className="flex items-center justify-between gap-3 border-t pt-2">
           <div className="text-right font-medium">Total</div>
-          <div className="font-semibold">${grandTotal.toFixed(2)}</div>
+          <div className="font-semibold">{CURRENCY_SYMBOL}{grandTotal.toFixed(2)}</div>
         </div>
       </div>
 

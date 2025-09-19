@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { CURRENCY_SYMBOL, formatMoney } from '@/lib/currency';
 
 export default function ProductsPage() {
   const [rows, setRows] = useState([]);
@@ -81,10 +82,10 @@ export default function ProductsPage() {
               <td>{p.sku || '—'}</td>
               <td>{p.unit || '—'}</td>
               <td>
-                {p.base_setup_cost != null ? `$${money(p.base_setup_cost)}` : '—'} {/* Cost shown in products database */}
+                {p.base_setup_cost != null ? `${CURRENCY_SYMBOL}${money(p.base_setup_cost)}` : '—'} {/* Cost shown in products database */}
               </td>
               <td>
-                {p.cost_price != null ? `$${money(p.cost_price)}` : '—'}
+                {p.cost_price != null ? `${CURRENCY_SYMBOL}${money(p.cost_price)}` : '—'}
               </td>
               <td>
                 <button

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { statusBadgeCls } from '@/app/components/statusBadgeCls';
 import MaterialSelect from '@/app/components/MaterialSelect';
+import { CURRENCY_SYMBOL, formatMoney } from '@/lib/currency';
 
 export default function OrderDetailPage({ params }) {
   const router = useRouter();
@@ -397,8 +398,8 @@ export default function OrderDetailPage({ params }) {
                         <td>{a.sku || '—'}</td>
                         <td>{a.unit || '—'}</td>
                         <td>{Number.isFinite(qty) ? qty : '—'}</td>
-                        <td>${money(unit)}</td>
-                        <td>${money(line)}</td>
+                        <td>{CURRENCY_SYMBOL}{money(unit)}</td>
+                        <td>{CURRENCY_SYMBOL}{money(line)}</td>
                         <td className="text-xs text-neutral-500">{a.created_at || '—'}</td>
                       </tr>
                     );
@@ -408,7 +409,7 @@ export default function OrderDetailPage({ params }) {
               <tfoot>
                 <tr>
                   <td colSpan={5} className="text-right font-medium py-2">Total cost</td>
-                  <td className="font-semibold">${money(totalAllocCost)}</td>
+                  <td className="font-semibold">{CURRENCY_SYMBOL}{money(totalAllocCost)}</td>
                   <td />
                 </tr>
               </tfoot>
