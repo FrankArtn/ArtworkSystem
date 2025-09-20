@@ -54,7 +54,12 @@ export default function QuotesPage() {
 
   return (
     <div className="max-w-5xl">
-      <h2 className="text-2xl font-semibold mb-3">Quotes</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-2xl font-semibold">Quotes</h2>
+        <Link href="/quotes/new" className="rounded border px-3 py-1">
+          New Quotes
+        </Link>
+      </div>
       {err && <p className="text-red-600 mb-2">{err}</p>}
 
       {/* Tabs */}
