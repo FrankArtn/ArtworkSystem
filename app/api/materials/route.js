@@ -14,7 +14,7 @@ export async function GET(req) {
     try {
       const sqlView = `
         SELECT id, name, sku, unit, cost_price,
-               unallocated_stock, wip_qty, stock_qty
+              unallocated_stock, wip_qty, used, stock_qty
         FROM materials_with_totals
         ${where}
         ORDER BY updated_at DESC
@@ -38,7 +38,8 @@ export async function GET(req) {
           COALESCE(cost_price, 0)        AS cost_price,
           COALESCE(unallocated_stock, 0) AS unallocated_stock,
           COALESCE(wip_qty, 0)           AS wip_qty,
-          (COALESCE(unallocated_stock, 0) + COALESCE(wip_qty, 0)) AS stock_qty
+          COALESCE(used, 0)              AS used,
+          (COALESCE(unallocated_stock, 0) + COALESCE(wip_qty, 0) + COALESCE(used, 0)) AS stock_qty
         FROM materials
         ${where}
       `;

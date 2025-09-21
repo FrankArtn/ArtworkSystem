@@ -25,6 +25,9 @@ export default function OrderDetailPage({ params }) {
 
   // NEW: job pictures state
   const [images, setImages] = useState([]);
+  // Return-unused state
+  const [returnQty, setReturnQty] = useState({}); // { [allocId]: "1.5" }
+  const [returnBusyId, setReturnBusyId] = useState(null);
 
   // helpers for numbers / money
   const num   = (x) => { const n = Number(x); return Number.isFinite(n) ? n : 0; };
@@ -86,6 +89,31 @@ export default function OrderDetailPage({ params }) {
       setImages(Array.isArray(data) ? data : []);
     } catch {
       setImages([]);
+    }
+  }
+
+  // Move qty from WIP -> USED at same unit cost (no restock)
+  async function returnUnused(a) {
+    const raw = returnQty[a.id] ?? '';
+    const qty = Number(raw);
+    if (!Number.isFinite(qty) || qty <= 0) { setErr('Return quantity must be > 0'); return; }
+    if (qty > Number(a.qty)) { setErr('Return qty cannot exceed allocated qty'); return; }
+    setErr('');
+    setReturnBusyId(a.id);
+    try {
+      const r = await fetch(`/api/orders/${id}/materials/return`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ allocation_id: a.id, qty }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || 'Return failed');
+      await Promise.all([loadAllocations(), loadMaterialsList()]);
+      setReturnQty(prev => ({ ...prev, [a.id]: '' }));
+    } catch (e) {
+      setErr(e.message || 'Return failed');
+    } finally {
+      setReturnBusyId(null);
     }
   }
 
@@ -393,14 +421,36 @@ export default function OrderDetailPage({ params }) {
                     const qty  = num(a.qty);
                     const line = unit * qty;
                     return (
-                      <tr key={`${a.id ?? `${a.material_id}-${a.created_at ?? ''}`}`} className="[&>td]:py-2 [&>td]:border-b">
+                      <tr key={`${a.id ?? `${a.material_id}-${a.created_at ?? ''}`}`} className="[&>td]:py-2 [&>td]:border-b align-top">
                         <td>{a.material_name || '—'}</td>
                         <td>{a.sku || '—'}</td>
                         <td>{a.unit || '—'}</td>
                         <td>{Number.isFinite(qty) ? qty : '—'}</td>
                         <td>{CURRENCY_SYMBOL}{money(unit)}</td>
                         <td>{CURRENCY_SYMBOL}{money(line)}</td>
-                        <td className="text-xs text-neutral-500">{a.created_at || '—'}</td>
+                        <td className="text-xs text-neutral-500">
+                          <div>{a.created_at || '—'}</div>
+                          <div className="mt-2 flex items-end gap-1">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="Return qty"
+                              className="border rounded px-2 py-1 w-28"
+                              value={returnQty[a.id] ?? ''}
+                              onChange={e => setReturnQty(prev => ({ ...prev, [a.id]: e.target.value }))}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => returnUnused(a)}
+                              disabled={returnBusyId === a.id}
+                              className="rounded border px-2 py-1 text-xs disabled:opacity-60"
+                              title="Return unused materials (moves to USED)"
+                            >
+                              {returnBusyId === a.id ? 'Returning…' : 'Return'}
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     );
                   })
@@ -408,7 +458,7 @@ export default function OrderDetailPage({ params }) {
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={5} className="text-right font-medium py-2">Total cost</td>
+                  <td colSpan={5} className="text-right font-medium py-2 pr-2">Total cost</td>
                   <td className="font-semibold">{CURRENCY_SYMBOL}{money(totalAllocCost)}</td>
                   <td />
                 </tr>

@@ -189,13 +189,14 @@ export default function MaterialsPage() {
             <th>Unit</th>
             <th>Cost price</th>
             <th>Unallocated</th>
+            <th>Used</th>
             <th>WIP</th>
             <th>Total</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
-            <tr><td colSpan={7} className="py-4 text-neutral-500">No materials found.</td></tr>
+            <tr><td colSpan={8} className="py-4 text-neutral-500">No materials found.</td></tr>
           ) : (
             rows.map((m) => (
               <tr key={m.id} className="[&>td]:py-2 [&>td]:border-b">
@@ -204,8 +205,9 @@ export default function MaterialsPage() {
                 <td>{m.unit || "—"}</td>
                 <td>{typeof m.cost_price === "number" ? Number(m.cost_price).toFixed(2) : (m.cost_price ?? 0)}</td>
                 <td>{m.unallocated_stock ?? 0}</td>
+                <td>{m.used ?? 0}</td>
                 <td>{m.wip_qty ?? 0}</td>
-                <td>{m.stock_qty ?? ((m.unallocated_stock ?? 0) + (m.wip_qty ?? 0))}</td>
+                <td>{m.stock_qty ?? ((m.unallocated_stock ?? 0) + (m.wip_qty ?? 0) + (m.used ?? 0))}</td>
               </tr>
             ))
           )}
@@ -386,11 +388,11 @@ export default function MaterialsPage() {
               />
             </label>
 
-            <div className="sm:col-span-2">
+            <div className="border rounded px-3 py-3 inline-block w-max justify-self-start">
               <button
                 type="submit"
                 disabled={creating}
-                className="rounded bg-black text-white px-3 py-1 disabled:opacity-60"
+                className="rounded bg-black text-white px-3 py-1 disabled:opacity-60 whitespace-normal break-words"
               >
                 {creating ? "Creating…" : "Create material"}
               </button>
