@@ -6,6 +6,8 @@ export default function MaterialsPage() {
   const [mats, setMats] = useState([]); // always an array
   const [sel, setSel] = useState("");
   const [qty, setQty] = useState(10);
+  const [q, setQ] = useState("");       // search text
+  const [debouncedQ, setDebouncedQ] = useState(""); // debounced search
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -30,10 +32,13 @@ export default function MaterialsPage() {
   const [creating, setCreating] = useState(false);
   const [createMsg, setCreateMsg] = useState("");
 
-  async function load() {
+  async function load(qStr = "") {
     setErr("");
     try {
-      const r = await fetch("/api/materials", { cache: "no-store" });
+      const url = qStr.trim()
+        ? `/api/materials?q=${encodeURIComponent(qStr.trim())}`
+        : `/api/materials`;
+      const r = await fetch(url, { cache: "no-store" });
       if (!r.ok) {
         try { console.error("GET /api/materials failed:", await r.text()); } catch {}
         setMats([]);
@@ -61,7 +66,17 @@ export default function MaterialsPage() {
     }
   }
 
-  useEffect(() => { load(); loadJobs(); }, []);
+  
+    useEffect(() => { loadJobs(); }, []);
+
+    // Debounce search input
+    useEffect(() => {
+      const t = setTimeout(() => setDebouncedQ(q), 300);
+      return () => clearTimeout(t);
+    }, [q]);
+
+    // Reload list when debounced query changes
+    useEffect(() => { load(debouncedQ); }, [debouncedQ]);
 
   // Add to Unallocated
   async function addUnallocated() {
@@ -83,7 +98,7 @@ export default function MaterialsPage() {
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "Add stock failed");
-      await load();
+      await load(debouncedQ);
       setAddCost(""); // reset the field on success
     } catch (e) {
       console.error(e);
@@ -124,7 +139,7 @@ export default function MaterialsPage() {
         throw new Error(msg);
       }
 
-      await load(); // refresh table
+      await load(debouncedQ); // refresh table with current filter
       setJobSel("");
     } catch (e) {
       setErr(e.message || "Failed to transfer");
@@ -163,7 +178,7 @@ export default function MaterialsPage() {
         setForm({
           name: "", sku: "", unit: "m2", costPerUnit: "", initialUnallocated: ""
         });
-        await load();
+        await load(debouncedQ);
       }
     } catch (e) {
       console.error(e);
@@ -177,7 +192,31 @@ export default function MaterialsPage() {
 
   return (
     <div className="max-w-4xl">
-      <h2 className="text-2xl font-semibold mb-3">Materials</h2>
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <h2 className="text-2xl font-semibold">Materials</h2>
+        <form
+          onSubmit={(e)=>{ e.preventDefault(); setDebouncedQ(q); }}
+          className="flex items-center gap-2"
+        >
+          <input
+            type="search"
+            value={q}
+            onChange={(e)=>setQ(e.target.value)}
+            placeholder="Search name or SKU…"
+            className="border rounded px-2 py-1 w-64"
+          />
+          {q ? (
+            <button
+              type="button"
+              onClick={()=>setQ("")}
+              className="text-xs border rounded px-2 py-1"
+              title="Clear"
+            >
+              Clear
+            </button>
+          ) : null}
+        </form>
+      </div>
       {err && <p className="text-red-600 mb-2">{err}</p>}
 
       {/* Table */}
